@@ -1,4 +1,4 @@
-use compile::Crate;
+use manifest::Crate;
 use std::collections::HashMap;
 use toml;
 

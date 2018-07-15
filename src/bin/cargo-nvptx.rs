@@ -1,7 +1,8 @@
 extern crate nvptx;
 
-use nvptx::compile::Driver;
 use nvptx::error::Result;
+use nvptx::Driver;
+
 use std::env;
 use std::path::*;
 
