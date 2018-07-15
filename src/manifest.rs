@@ -44,28 +44,31 @@ impl ManifestGenerator {
         }
     }
 
-    pub fn add_crate(&mut self, name: &str) {
+    pub fn add_crate(mut self, name: &str) -> Self {
         self.crates.push(Crate {
             name: name.to_string(),
             version: None,
             path: None,
         });
+        self
     }
 
-    pub fn add_crate_with_version(&mut self, name: &str, version: &str) {
+    pub fn add_crate_with_version(mut self, name: &str, version: &str) -> Self {
         self.crates.push(Crate {
             name: name.to_string(),
             version: Some(version.to_string()),
             path: None,
         });
+        self
     }
 
-    pub fn add_crate_with_path<P: AsRef<Path>>(&mut self, name: &str, path: P) {
+    pub fn add_crate_with_path<P: AsRef<Path>>(mut self, name: &str, path: P) -> Self {
         self.crates.push(Crate {
             name: name.to_string(),
             version: None,
             path: Some(path.as_ref().to_owned()),
         });
+        self
     }
 
     /// Generate Cargo.toml

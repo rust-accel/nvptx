@@ -1,7 +1,6 @@
 extern crate nvptx;
 
-use nvptx::compile::Builder;
-use nvptx::config::Crate;
+use nvptx::*;
 
 const GPU_CODE: &'static str = r#"
 #![feature(abi_ptx)]
@@ -18,16 +17,22 @@ pub unsafe extern "ptx-kernel" fn add(a: *const f64, b: *const f64, c: *mut f64,
 
 #[test]
 fn compile_tmp() {
-    let crates = &[Crate::with_version("accel-core", "0.2.0-alpha")];
-    let mut builder = Builder::new(crates);
-    let ptx = builder.compile(GPU_CODE).unwrap();
+    let dri = Driver::new().unwrap();
+    ManifestGenerator::new(dri.path())
+        .add_crate_with_version("accel-core", "0.2.0-alpha")
+        .generate()
+        .unwrap();
+    let ptx = dri.compile_str(GPU_CODE).unwrap();
     println!("PTX = {:?}", ptx);
 }
 
 #[test]
 fn compile_path() {
-    let crates = &[Crate::with_version("accel-core", "0.2.0-alpha")];
-    let mut builder = Builder::with_path("~/tmp/rust2ptx", crates);
-    let ptx = builder.compile(GPU_CODE).unwrap();
+    let dri = Driver::with_path("~/tmp/rust2ptx").unwrap();
+    ManifestGenerator::new(dri.path())
+        .add_crate_with_version("accel-core", "0.2.0-alpha")
+        .generate()
+        .unwrap();
+    let ptx = dri.compile_str(GPU_CODE).unwrap();
     println!("PTX = {:?}", ptx);
 }
