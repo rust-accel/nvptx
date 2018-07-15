@@ -37,25 +37,31 @@ pub enum CompileError {
         command,
     )]
     LLVMCommandNotFound { command: String },
-    #[fail(
-        display = "Unexpected IO Error during {:?} step: {:?}",
-        step,
-        error
-    )]
-    UnexpectedIOError { step: Step, error: io::Error },
+    #[fail(display = "IO Error during {:?} step: {:?}", step, comment)]
+    OtherIOError {
+        step: Step,
+        comment: String,
+        error: io::Error,
+    },
 }
 
 pub type Result<T> = ::std::result::Result<T, failure::Error>;
 
 pub trait Logging {
     type T;
-    fn log(self, step: Step) -> Result<Self::T>;
+    fn log(self, step: Step, comment: &str) -> Result<Self::T>;
 }
 
 impl<T> Logging for io::Result<T> {
     type T = T;
-    fn log(self, step: Step) -> Result<Self::T> {
-        self.map_err(|error| CompileError::UnexpectedIOError { step, error }.into())
+    fn log(self, step: Step, comment: &str) -> Result<Self::T> {
+        self.map_err(|error| {
+            CompileError::OtherIOError {
+                step,
+                comment: comment.to_owned(),
+                error,
+            }.into()
+        })
     }
 }
 

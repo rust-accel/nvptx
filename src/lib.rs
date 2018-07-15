@@ -6,7 +6,6 @@ extern crate log;
 extern crate failure;
 #[macro_use]
 extern crate serde_derive;
-extern crate cargo;
 extern crate dirs;
 extern crate glob;
 extern crate serde;

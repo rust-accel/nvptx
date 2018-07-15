@@ -5,53 +5,123 @@ use std::path::*;
 use std::{fs, io, process};
 use tempdir::TempDir;
 
-use config::{to_toml, Crate};
+use config::CargoTOML;
 use error::*;
 
-/// Compile Rust string into PTX string
-pub struct Builder {
+#[derive(Debug, Clone)]
+pub struct Crate {
+    name: String,
+    version: Option<String>,
+    path: Option<PathBuf>,
+}
+
+impl Crate {
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    pub fn version(&self) -> String {
+        self.version.clone().unwrap_or("*".to_string())
+    }
+
+    pub fn path_str(&self) -> Option<String> {
+        match &self.path {
+            Some(path) => {
+                let s = path.to_str()?;
+                Some(s.to_owned())
+            }
+            None => None,
+        }
+    }
+}
+
+pub struct ManifestGenerator {
     path: PathBuf,
     crates: Vec<Crate>,
 }
 
-impl Builder {
-    pub fn new(crates: &[Crate]) -> Self {
-        let path = TempDir::new("ptx-builder")
+impl ManifestGenerator {
+    pub fn new<P: AsRef<Path>>(path: P) -> Self {
+        ManifestGenerator {
+            path: path.as_ref().to_owned(),
+            crates: Vec::new(),
+        }
+    }
+
+    pub fn add_crate(&mut self, name: &str) {
+        self.crates.push(Crate {
+            name: name.to_string(),
+            version: None,
+            path: None,
+        });
+    }
+
+    pub fn add_crate_with_version(&mut self, name: &str, version: &str) {
+        self.crates.push(Crate {
+            name: name.to_string(),
+            version: Some(version.to_string()),
+            path: None,
+        });
+    }
+
+    pub fn add_crate_with_path<P: AsRef<Path>>(&mut self, name: &str, path: P) {
+        self.crates.push(Crate {
+            name: name.to_string(),
+            version: None,
+            path: Some(path.as_ref().to_owned()),
+        });
+    }
+
+    /// Generate Cargo.toml
+    pub fn generate(self) -> Result<()> {
+        let setting = CargoTOML::from_crates(&self.crates);
+        save_str(&self.path, &setting.as_toml(), "Cargo.toml")
+            .log(Step::Ready, "Failed to write Cargo.toml")?;
+        Ok(())
+    }
+}
+
+/// Compile Rust string into PTX string
+pub struct Driver {
+    path: PathBuf,
+}
+
+impl Driver {
+    /// Create builder on /tmp
+    pub fn new() -> Result<Self> {
+        let path = TempDir::new("accel-nvptx")
             .expect("Failed to create temporal directory")
             .into_path();
-        Self::with_path(&path, crates)
+        Self::with_path(&path)
     }
 
-    pub fn with_path<P: AsRef<Path>>(path: P, crates: &[Crate]) -> Self {
+    /// Create builder at the specified path
+    pub fn with_path<P: AsRef<Path>>(path: P) -> Result<Self> {
         let mut path = path.as_ref().to_owned();
         if path.starts_with("~") {
-            let home = home_dir().expect("Cannot get home dir");
+            let home = home_dir().unwrap();
             path = home.join(path.strip_prefix("~").unwrap());
         }
-        fs::create_dir_all(path.join("src")).unwrap();
-        Builder {
-            path: path,
-            crates: crates.to_vec(),
-        }
+        fs::create_dir_all(path.join("src")).log(Step::Ready, "Cannot create build directory")?;
+        Ok(Driver { path: path })
     }
 
-    pub fn exists<P: AsRef<Path>>(path: P) -> Self {
-        Self::with_path(path, &[])
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 
-    pub fn crates(&self) -> &[Crate] {
-        &self.crates
-    }
-
-    pub fn compile(&mut self, kernel: &str) -> Result<String> {
-        self.generate_manifest()?;
+    pub fn compile(&self) -> Result<String> {
         self.copy_triplet()?;
-        self.save(kernel, "src/lib.rs").log(Step::Ready)?;
-        self.format();
-        self.clean();
         self.build()?;
         self.link()?;
         self.load_ptx()
+    }
+
+    pub fn compile_str(&self, kernel: &str) -> Result<String> {
+        save_str(&self.path, kernel, "src/lib.rs").log(Step::Ready, "Failed to save lib.rs")?;
+        self.format();
+        self.clean();
+        self.compile()
     }
 
     pub fn build(&self) -> Result<()> {
@@ -103,29 +173,19 @@ impl Builder {
     }
 
     pub fn load_ptx(&self) -> Result<String> {
-        let mut f = fs::File::open(self.path.join("kernel.ptx")).log(Step::Load)?;
+        let mut f =
+            fs::File::open(self.path.join("kernel.ptx")).log(Step::Load, "kernel.ptx cannot open")?;
         let mut res = String::new();
         f.read_to_string(&mut res).unwrap();
         Ok(res)
     }
 
     pub fn copy_triplet(&self) -> Result<()> {
-        self.save(
+        save_str(
+            &self.path,
             include_str!("nvptx64-nvidia-cuda.json"),
             "nvptx64-nvidia-cuda.json",
-        ).log(Step::Ready)
-    }
-
-    pub fn generate_manifest(&self) -> Result<()> {
-        self.save(&to_toml(&self.crates), "Cargo.toml")
-            .log(Step::Ready)
-    }
-
-    /// save string as a file on the Builder directory
-    fn save(&self, contents: &str, filename: &str) -> io::Result<()> {
-        let mut f = fs::File::create(self.path.join(filename))?;
-        f.write(contents.as_bytes())?;
-        Ok(())
+        ).log(Step::Ready, "Failed to copy triplet file")
     }
 
     fn clean(&self) {
@@ -136,7 +196,7 @@ impl Builder {
         };
     }
 
-    /// Format generated code using cargo-fmt for better debugging
+    // Format generated code using cargo-fmt for better debugging
     fn format(&self) {
         let result = process::Command::new("cargo")
             .args(&["fmt", "--all"])
@@ -173,4 +233,10 @@ fn llvm_command(name: &str) -> Result<String> {
             command: name.into(),
         }.into())
     }
+}
+
+fn save_str<P: AsRef<Path>>(path: P, contents: &str, filename: &str) -> io::Result<()> {
+    let mut f = fs::File::create(path.as_ref().join(filename))?;
+    f.write(contents.as_bytes())?;
+    Ok(())
 }

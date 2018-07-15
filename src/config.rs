@@ -1,68 +1,36 @@
+use compile::Crate;
 use std::collections::HashMap;
-use std::path::*;
 use toml;
 
-pub fn to_toml(crates: &[Crate]) -> String {
-    let dependencies = crates
-        .iter()
-        .cloned()
-        .map(|c| {
-            let name = c.name;
-            let version = c.version.unwrap_or("*".to_string());
-            let path = c.path.map(|p| p.to_str().unwrap().to_owned());
-            (name, CrateInfo { version, path })
-        })
-        .collect();
-    let cargo = CargoTOML {
-        package: Package::default(),
-        profile: Profile::default(),
-        dependencies,
-    };
-    toml::to_string(&cargo).unwrap()
-}
-
-#[derive(Debug, Clone)]
-pub struct Crate {
-    name: String,
-    version: Option<String>,
-    path: Option<PathBuf>,
-}
-
-impl Crate {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn new(name: &str) -> Self {
-        Self {
-            name: name.to_string(),
-            version: None,
-            path: None,
-        }
-    }
-
-    pub fn with_version(name: &str, version: &str) -> Self {
-        Self {
-            name: name.to_string(),
-            version: Some(version.to_string()),
-            path: None,
-        }
-    }
-
-    pub fn with_path<P: AsRef<Path>>(name: &str, path: P) -> Self {
-        Self {
-            name: name.to_string(),
-            version: None,
-            path: Some(path.as_ref().to_owned()),
-        }
-    }
-}
-
 #[derive(Serialize)]
-struct CargoTOML {
+pub struct CargoTOML {
     package: Package,
     profile: Profile,
     dependencies: Dependencies,
+}
+
+impl CargoTOML {
+    pub fn from_crates(crates: &[Crate]) -> Self {
+        let dependencies = crates
+            .iter()
+            .cloned()
+            .map(|c| {
+                let name = c.name();
+                let version = c.version();
+                let path = c.path_str();
+                (name, CrateInfo { version, path })
+            })
+            .collect();
+        CargoTOML {
+            package: Package::default(),
+            profile: Profile::default(),
+            dependencies,
+        }
+    }
+
+    pub fn as_toml(&self) -> String {
+        toml::to_string(&self).unwrap()
+    }
 }
 
 #[derive(Serialize)]
