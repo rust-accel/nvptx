@@ -1,7 +1,7 @@
 extern crate nvptx;
 
-use nvptx::config::Crate;
 use nvptx::compile::Builder;
+use nvptx::config::Crate;
 
 const GPU_CODE: &'static str = r#"
 #![feature(abi_ptx)]

@@ -1,9 +1,10 @@
+use dirs::home_dir;
+use failure;
 use glob::glob;
 use std::io::{Read, Write};
 use std::path::*;
-use std::{fs, io, process, fmt};
+use std::{fs, io, process};
 use tempdir::TempDir;
-use dirs::home_dir;
 
 use config::{to_toml, Crate};
 
@@ -16,42 +17,43 @@ pub enum Step {
     Load,
 }
 
-#[derive(From)]
+#[derive(Fail, Debug)]
 pub enum CompileError {
-    ExternalCommandError((Step, String, i32)),
-    ExternalCommandLaunchError((Step, String, io::Error)),
-    LLVMCommandNotFound(String),
-    IOError((Step, io::Error)),
+    #[fail(
+        display = "External command {} failed during {:?} step. Return code: {}",
+        command,
+        step,
+        error_code
+    )]
+    CommandFailure {
+        step: Step,
+        command: String,
+        error_code: i32,
+    },
+    #[fail(
+        display = "External command {} failed during {:?}. Please ensure it is installed.",
+        command,
+        step,
+    )]
+    CommandIOFailure {
+        step: Step,
+        command: String,
+        error: io::Error,
+    },
+    #[fail(
+        display = "LLVM Command {} or postfixed by *-6.0 or *-7.0 are not found.",
+        command,
+    )]
+    LLVMCommandNotFound { command: String },
+    #[fail(
+        display = "Unexpected IO Error during {:?} step: {:?}",
+        step,
+        error
+    )]
+    UnexpectedIOError { step: Step, error: io::Error },
 }
-impl fmt::Debug for CompileError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            CompileError::ExternalCommandError((step, ref command, ref code)) => {
-                write!(f, "External command {} failed during {:?} step. Return code: {}",
-                    command, step, code)
-            }
-            CompileError::ExternalCommandLaunchError((step, ref command, ref err)) => {
-                match err.kind() {
-                    io::ErrorKind::NotFound => {
-                        write!(f, "External command {} failed during {:?} step because the program could not be found. Please ensure this program is installed and try again.",
-                            command, step)
-                    }
-                    _ => {
-                        write!(f, "External command {} failed during {:?} step because of an unexpected IO Error: {:?}", 
-                        command, step, err)
-                    }
-                }
-            }
-            CompileError::LLVMCommandNotFound(ref name) => {
-                write!(f, "LLVM Command {name}, {name}-6.0, or {name}-7.0 are not found. Please install LLVM, and add one of them into your $PATH", name=name)
-            }
-            CompileError::IOError((step, ref err)) => {
-                write!(f, "Unexpected IO Error during {:?} step: {:?}", step, err)
-            }
-        }
-    }
-}
-pub type Result<T> = ::std::result::Result<T, CompileError>;
+
+pub type Result<T> = ::std::result::Result<T, failure::Error>;
 
 trait Logging {
     type T;
@@ -61,7 +63,7 @@ trait Logging {
 impl<T> Logging for io::Result<T> {
     type T = T;
     fn log(self, step: Step) -> Result<Self::T> {
-        self.map_err(|e| (step, e).into())
+        self.map_err(|error| CompileError::UnexpectedIOError { step, error }.into())
     }
 }
 
@@ -113,7 +115,13 @@ impl Builder {
 
     pub fn build(&self) -> Result<()> {
         process::Command::new("xargo")
-            .args(&["+nightly", "rustc", "--release", "--target", "nvptx64-nvidia-cuda"])
+            .args(&[
+                "+nightly",
+                "rustc",
+                "--release",
+                "--target",
+                "nvptx64-nvidia-cuda",
+            ])
             .current_dir(&self.path)
             .check_run(Step::Build)
     }
@@ -132,7 +140,13 @@ impl Builder {
         let pat_rsbc = format!("{}/target/**/deps/*.o", self.path.display());
         let bcs: Vec<_> = glob(&pat_rsbc)
             .unwrap()
-            .map(|x| fs::canonicalize(x.unwrap()).unwrap().to_str().unwrap().to_owned())
+            .map(|x| {
+                fs::canonicalize(x.unwrap())
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_owned()
+            })
             .collect();
         process::Command::new(llvm_command("llvm-link")?)
             .args(&bcs)
@@ -155,12 +169,15 @@ impl Builder {
     }
 
     pub fn copy_triplet(&self) -> Result<()> {
-        self.save(include_str!("nvptx64-nvidia-cuda.json"), "nvptx64-nvidia-cuda.json")
-            .log(Step::Ready)
+        self.save(
+            include_str!("nvptx64-nvidia-cuda.json"),
+            "nvptx64-nvidia-cuda.json",
+        ).log(Step::Ready)
     }
 
     pub fn generate_manifest(&self) -> Result<()> {
-        self.save(&to_toml(&self.crates), "Cargo.toml").log(Step::Ready)
+        self.save(&to_toml(&self.crates), "Cargo.toml")
+            .log(Step::Ready)
     }
 
     /// save string as a file on the Builder directory
@@ -196,15 +213,23 @@ trait CheckRun {
 
 impl CheckRun for process::Command {
     fn check_run(&mut self, step: Step) -> Result<()> {
-        let st = self.status().map_err(|e| {
-            let command_string = format!("{:?}", self);
-            CompileError::ExternalCommandLaunchError((step, command_string, e))
+        let st = self.status().map_err(|error| {
+            let command = format!("{:?}", self);
+            CompileError::CommandIOFailure {
+                step,
+                command,
+                error,
+            }
         })?;
         match st.code() {
-            Some(c) => {
-                if c != 0 {
-                    let command_string = format!("{:?}", self);
-                    Err(CompileError::ExternalCommandError((step, command_string, c)).into())
+            Some(error_code) => {
+                if error_code != 0 {
+                    let command = format!("{:?}", self);
+                    Err(CompileError::CommandFailure {
+                        step,
+                        command,
+                        error_code,
+                    }.into())
                 } else {
                     Ok(())
                 }
@@ -233,6 +258,8 @@ fn llvm_command(name: &str) -> Result<String> {
     } else if test_using_help(&name) {
         Ok(name.into())
     } else {
-        Err(CompileError::LLVMCommandNotFound(name.into()))
+        Err(CompileError::LLVMCommandNotFound {
+            command: name.into(),
+        }.into())
     }
 }
