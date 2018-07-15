@@ -15,3 +15,4 @@ extern crate toml;
 
 pub mod compile;
 pub mod config;
+pub mod error;
