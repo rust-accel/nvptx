@@ -1,4 +1,5 @@
 
+extern crate dirs;
 extern crate glob;
 #[macro_use]
 extern crate derive_more;
