@@ -11,7 +11,6 @@ use config::{to_toml, Crate};
 #[derive(Debug, Clone, Copy)]
 pub enum Step {
     Ready,
-    Format,
     Link,
     Build,
     Load,
@@ -191,18 +190,19 @@ impl Builder {
         let path = self.path.join("target");
         match fs::remove_dir_all(&path) {
             Ok(_) => {}
-            Err(_) => eprintln!("Already clean (dir = {})", path.display()),
+            Err(_) => info!("Already clean (dir = {})", path.display()),
         };
     }
 
+    /// Format generated code using cargo-fmt for better debugging
     fn format(&self) {
         let result = process::Command::new("cargo")
-            .args(&["fmt"])
+            .args(&["fmt", "--all"])
             .current_dir(&self.path)
-            .check_run(Step::Format);
+            .check_run(Step::Ready);
 
         if let Err(e) = result {
-            eprintln!("Warning: {:?}", e);
+            warn!("Format failed: {:?}", e);
         }
     }
 }
@@ -239,7 +239,8 @@ impl CheckRun for process::Command {
     }
 }
 
-fn test_using_help(name: &str) -> bool {
+/// Check if the command exists using "--help" flag
+fn check_exists(name: &str) -> bool {
     process::Command::new(name)
         .arg("--help")
         .stdout(process::Stdio::null())
@@ -251,11 +252,11 @@ fn test_using_help(name: &str) -> bool {
 fn llvm_command(name: &str) -> Result<String> {
     let name6 = format!("{}-6.0", name);
     let name7 = format!("{}-7.0", name);
-    if test_using_help(&name6) {
+    if check_exists(&name6) {
         Ok(name6)
-    } else if test_using_help(&name7) {
+    } else if check_exists(&name7) {
         Ok(name7)
-    } else if test_using_help(&name) {
+    } else if check_exists(&name) {
         Ok(name.into())
     } else {
         Err(CompileError::LLVMCommandNotFound {
