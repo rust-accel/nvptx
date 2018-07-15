@@ -1,0 +1,28 @@
+version: 2
+jobs:
+  test_cuda91:
+    docker:
+      - image: registry.gitlab.com/termoshtt/rust-cuda:cuda9.1
+    steps:
+      - checkout
+      - run:
+          name: test nvptx
+          command: |
+            cargo test -v
+
+  test_cuda91_llvm60:
+    docker:
+      - image: registry.gitlab.com/termoshtt/rust-cuda:cuda9.1-llvm6.0
+    steps:
+      - checkout
+      - run:
+          name: test nvptx
+          command: |
+            cargo test -v
+
+workflows:
+  version: 2
+  tests:
+    jobs:
+      - test_cuda91
+      - test_cuda91_llvm60
