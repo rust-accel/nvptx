@@ -123,8 +123,9 @@ impl Driver {
     }
 
     pub fn load_ptx(&self) -> Result<String> {
-        let mut f =
-            fs::File::open(self.path.join("kernel.ptx")).log(Step::Load, "kernel.ptx cannot open")?;
+        let target_dir = self.target_dir().log_unwrap(Step::Load)?;
+        let mut f = fs::File::open(target_dir.join("kernel.ptx"))
+            .log(Step::Load, "kernel.ptx cannot open")?;
         let mut res = String::new();
         f.read_to_string(&mut res).unwrap();
         Ok(res)
