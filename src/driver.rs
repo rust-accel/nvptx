@@ -37,18 +37,18 @@ impl Driver {
         &self.path
     }
 
-    pub fn compile(&self) -> Result<String> {
+    pub fn compile(&self, _release: bool) -> Result<String> {
         self.copy_triplet()?;
         self.build()?;
         self.link()?;
         self.load_ptx()
     }
 
-    pub fn compile_str(&self, kernel: &str) -> Result<String> {
+    pub fn compile_str(&self, kernel: &str, release: bool) -> Result<String> {
         save_str(&self.path, kernel, "src/lib.rs").log(Step::Ready, "Failed to save lib.rs")?;
         self.format();
         self.clean();
-        self.compile()
+        self.compile(release)
     }
 
     pub fn build(&self) -> Result<()> {
