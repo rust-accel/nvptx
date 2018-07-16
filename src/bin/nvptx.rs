@@ -19,11 +19,7 @@ use tempdir::TempDir;
 enum Opt {
     /// Compile crate into PTX
     #[structopt(name = "build")]
-    Build {
-        /// Release build
-        #[structopt(long = "release")]
-        release: bool,
-    },
+    Build {},
 
     /// Download and Install nvptx-enabled rustc
     #[structopt(name = "install")]
@@ -118,9 +114,9 @@ fn main() -> Result<()> {
     let opt = Opt::from_args();
 
     match opt {
-        Opt::Build { release } => {
+        Opt::Build {} => {
             let manifest_path = get_manifest_path();
-            let ptx = Driver::with_path(manifest_path)?.compile(release)?;
+            let ptx = Driver::with_path(manifest_path)?.compile()?;
             println!("{}", ptx);
         }
         Opt::Install { path } => {
