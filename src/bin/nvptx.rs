@@ -73,7 +73,7 @@ fn install(path: &Path) -> Result<()> {
             let url = format!("https://s3-ap-northeast-1.amazonaws.com/rust-accel/{}", arc);
 
             // Download using curl
-            eprintln!("Downloading: {}", url);
+            eprintln!("download: {}", url);
             let ec = process::Command::new("curl")
                 .args(&["-o", &arc, &url])
                 .current_dir(tmp_dir.path())
@@ -84,7 +84,7 @@ fn install(path: &Path) -> Result<()> {
             // TODO checksum
 
             // Expand using tar
-            eprintln!("Expanding: {}", name);
+            eprintln!("expand: {}", name);
             let ec = process::Command::new("tar")
                 .args(&["xf", &arc])
                 .current_dir(tmp_dir.path())
@@ -102,6 +102,13 @@ fn install(path: &Path) -> Result<()> {
                 return Err(err_msg("Fail to install"));
             }
         }
+    }
+    let ec = process::Command::new("rustup")
+        .args(&["toolchain", "link", "accel-nvptx"])
+        .arg(path)
+        .status()?;
+    if !ec.success() {
+        return Err(err_msg("rustup failed"));
     }
 
     Ok(())
