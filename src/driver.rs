@@ -63,36 +63,57 @@ impl Driver {
     }
 
     pub fn link(&self) -> Result<()> {
+        let target_dir = fs::canonicalize(format!(
+            "{}/target/{}",
+            self.path.display(),
+            if self.release { "release" } else { "debug" }
+        )).unwrap();
+        let tmp = TempDir::new("nvptx-link")?;
+        let mut bitcodes = Vec::new();
         // extract rlibs using ar x
-        let pat_rlib = format!("{}/target/**/deps/*.rlib", self.path.display());
-        for path in glob(&pat_rlib).unwrap() {
+        for path in glob(&format!("{}/deps/*.rlib", target_dir.display()))? {
             let path = path.unwrap();
+            // get object archived in rlib
+            let obj_output = String::from_utf8(
+                process::Command::new("ar")
+                    .arg("t")
+                    .arg(&path)
+                    .output()?
+                    .stdout,
+            )?;
+            eprintln!("obj = {:?}", obj_output);
+            // get only *.o (drop *.z and metadata)
+            let mut objs = obj_output
+                .split('\n')
+                .filter_map(|f| {
+                    let f = f.trim();
+                    if f.ends_with(".o") {
+                        Some(f.to_owned())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            eprintln!("obj = {:?}", objs);
+            bitcodes.append(&mut objs);
+            // expand to temporal directory
             process::Command::new("ar")
-                .args(&["x", path.file_name().unwrap().to_str().unwrap()])
-                .current_dir(path.parent().unwrap())
+                .arg("x")
+                .arg(path)
+                .current_dir(tmp.path())
                 .check_run(Step::Link)?;
         }
         // link them
-        let pat_rsbc = format!("{}/target/**/deps/*.o", self.path.display());
-        let bcs: Vec<_> = glob(&pat_rsbc)
-            .unwrap()
-            .map(|x| {
-                fs::canonicalize(x.unwrap())
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .to_owned()
-            })
-            .collect();
         process::Command::new(llvm_command("llvm-link")?)
-            .args(&bcs)
-            .args(&["-o", "kernel.bc"])
-            .current_dir(&self.path)
+            .args(&bitcodes)
+            .arg("-o")
+            .arg(target_dir.join("kernel.bc"))
+            .current_dir(&tmp.path())
             .check_run(Step::Link)?;
         // compile bytecode to PTX
         process::Command::new(llvm_command("llc")?)
-            .args(&["-mcpu=sm_20", "kernel.bc", "-o", "kernel.ptx"])
-            .current_dir(&self.path)
+            .args(&["-mcpu=sm_50", "kernel.bc", "-o", "kernel.ptx"])
+            .current_dir(&target_dir)
             .check_run(Step::Link)?;
         Ok(())
     }
