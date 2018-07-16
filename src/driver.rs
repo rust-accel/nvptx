@@ -2,7 +2,7 @@ use dirs::home_dir;
 use glob::glob;
 use std::io::Read;
 use std::path::*;
-use std::{fs, process};
+use std::{fs, io, process};
 use tempdir::TempDir;
 
 use super::save_str;
@@ -62,26 +62,31 @@ impl Driver {
             .check_run(Step::Build)
     }
 
-    pub fn link(&self) -> Result<()> {
-        let target_dir = fs::canonicalize(format!(
-            "{}/target/{}",
+    fn target_dir(&self) -> io::Result<PathBuf> {
+        Ok(fs::canonicalize(format!(
+            "{}/target/nvptx64-nvidia-cuda/{}",
             self.path.display(),
             if self.release { "release" } else { "debug" }
-        )).unwrap();
-        let tmp = TempDir::new("nvptx-link")?;
+        ))?)
+    }
+
+    /// Link rlib into a single PTX file
+    pub fn link(&self) -> Result<()> {
+        let target_dir = self.target_dir().log_unwrap(Step::Link)?;
+        let tmp = TempDir::new("nvptx-link").log(Step::Link, "Cannot create tmp dir")?;
         let mut bitcodes = Vec::new();
         // extract rlibs using ar x
-        for path in glob(&format!("{}/deps/*.rlib", target_dir.display()))? {
+        for path in glob(&format!("{}/deps/*.rlib", target_dir.display())).log_unwrap(Step::Link)? {
             let path = path.unwrap();
             // get object archived in rlib
             let obj_output = String::from_utf8(
                 process::Command::new("ar")
                     .arg("t")
                     .arg(&path)
-                    .output()?
+                    .output()
+                    .log_unwrap(Step::Link)?
                     .stdout,
-            )?;
-            eprintln!("obj = {:?}", obj_output);
+            ).log_unwrap(Step::Link)?;
             // get only *.o (drop *.z and metadata)
             let mut objs = obj_output
                 .split('\n')
@@ -94,7 +99,6 @@ impl Driver {
                     }
                 })
                 .collect();
-            eprintln!("obj = {:?}", objs);
             bitcodes.append(&mut objs);
             // expand to temporal directory
             process::Command::new("ar")

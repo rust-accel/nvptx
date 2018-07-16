@@ -6,7 +6,7 @@ extern crate dirs;
 extern crate failure;
 extern crate tempdir;
 
-use nvptx::error::*;
+use nvptx::error::{Logging, Step};
 use nvptx::Driver;
 
 use failure::err_msg;
@@ -49,7 +49,7 @@ fn get_manifest_path() -> PathBuf {
 ///
 /// This archive has been generated from rust-accel/rust fork
 /// https://github.com/rust-accel/rust
-fn install(path: &Path) -> Result<()> {
+fn install(path: &Path) -> Result<(), failure::Error> {
     fs::create_dir_all(path)?;
     let tmp_dir = TempDir::new("nvptx_install")?;
     let rustc = "rustc";
@@ -110,7 +110,7 @@ fn install(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn main() -> Result<()> {
+fn main() -> nvptx::error::Result<()> {
     let opt = Opt::from_args();
 
     match opt {
@@ -120,7 +120,8 @@ fn main() -> Result<()> {
             println!("{}", ptx);
         }
         Opt::Install { path } => {
-            install(&path.unwrap_or(dirs::data_dir().unwrap().join("accel-nvptx")))?;
+            install(&path.unwrap_or(dirs::data_dir().unwrap().join("accel-nvptx")))
+                .log_unwrap(Step::Install)?;
         }
     }
     Ok(())
