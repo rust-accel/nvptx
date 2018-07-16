@@ -1,15 +1,5 @@
 version: 2
 jobs:
-  test_install:
-    docker:
-      - image: rust:1.27.1
-    steps:
-      - checkout
-      - run:
-          name: Test nvptx install
-          command: |
-            cargo run -- install
-
   test_cuda91:
     docker:
       - image: registry.gitlab.com/termoshtt/rust-cuda:cuda9.1
@@ -18,6 +8,7 @@ jobs:
       - run:
           name: test nvptx
           command: |
+            cargo run -- install
             cargo test -v
 
   test_cuda91_llvm60:
@@ -28,12 +19,12 @@ jobs:
       - run:
           name: test nvptx
           command: |
+            cargo run -- install
             cargo test -v
 
 workflows:
   version: 2
   tests:
     jobs:
-      - test_install
       - test_cuda91
       - test_cuda91_llvm60

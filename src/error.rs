@@ -3,6 +3,7 @@ use std::{io, process};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Step {
+    Install,
     Ready,
     Link,
     Build,
@@ -37,29 +38,48 @@ pub enum CompileError {
         command,
     )]
     LLVMCommandNotFound { command: String },
-    #[fail(display = "IO Error during {:?} step: {:?}", step, comment)]
-    OtherIOError {
+    #[fail(
+        display = "Error during {:?} step: {:?}, error: {:?}",
+        step,
+        comment,
+        error
+    )]
+    OtherError {
         step: Step,
         comment: String,
-        error: io::Error,
+        error: failure::Error,
     },
 }
 
-pub type Result<T> = ::std::result::Result<T, failure::Error>;
+pub fn err_msg(step: Step, comment: &str) -> CompileError {
+    CompileError::OtherError {
+        step,
+        comment: comment.to_owned(),
+        error: failure::err_msg(comment.to_owned()),
+    }
+}
+
+pub type Result<T> = ::std::result::Result<T, CompileError>;
 
 pub trait Logging {
     type T;
+    fn log_unwrap(self, step: Step) -> Result<Self::T>;
     fn log(self, step: Step, comment: &str) -> Result<Self::T>;
 }
 
-impl<T> Logging for io::Result<T> {
+impl<T, E: Into<failure::Error>> Logging for ::std::result::Result<T, E> {
     type T = T;
+
+    fn log_unwrap(self, step: Step) -> Result<Self::T> {
+        self.log(step, "Unknown IO Error")
+    }
+
     fn log(self, step: Step, comment: &str) -> Result<Self::T> {
-        self.map_err(|error| {
-            CompileError::OtherIOError {
+        self.map_err(|e| {
+            CompileError::OtherError {
                 step,
                 comment: comment.to_owned(),
-                error,
+                error: e.into(),
             }.into()
         })
     }

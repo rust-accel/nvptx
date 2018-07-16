@@ -2,7 +2,7 @@ use dirs::home_dir;
 use glob::glob;
 use std::io::Read;
 use std::path::*;
-use std::{fs, process};
+use std::{fs, io, process};
 use tempdir::TempDir;
 
 use super::save_str;
@@ -11,6 +11,7 @@ use error::*;
 /// Compile Rust string into PTX string
 pub struct Driver {
     path: PathBuf,
+    release: bool,
 }
 
 impl Driver {
@@ -30,7 +31,10 @@ impl Driver {
             path = home.join(path.strip_prefix("~").unwrap());
         }
         fs::create_dir_all(path.join("src")).log(Step::Ready, "Cannot create build directory")?;
-        Ok(Driver { path: path })
+        Ok(Driver {
+            path: path,
+            release: true,
+        })
     }
 
     pub fn path(&self) -> &Path {
@@ -38,7 +42,6 @@ impl Driver {
     }
 
     pub fn compile(&self) -> Result<String> {
-        self.copy_triplet()?;
         self.build()?;
         self.link()?;
         self.load_ptx()
@@ -52,67 +55,80 @@ impl Driver {
     }
 
     pub fn build(&self) -> Result<()> {
-        process::Command::new("xargo")
-            .args(&[
-                "+nightly",
-                "rustc",
-                "--release",
-                "--target",
-                "nvptx64-nvidia-cuda",
-            ])
+        process::Command::new("cargo")
+            .args(&["+accel-nvptx", "build", "--target", "nvptx64-nvidia-cuda"])
+            .arg(if self.release { "--release" } else { "" })
             .current_dir(&self.path)
             .check_run(Step::Build)
     }
 
+    fn target_dir(&self) -> io::Result<PathBuf> {
+        Ok(fs::canonicalize(format!(
+            "{}/target/nvptx64-nvidia-cuda/{}",
+            self.path.display(),
+            if self.release { "release" } else { "debug" }
+        ))?)
+    }
+
+    /// Link rlib into a single PTX file
     pub fn link(&self) -> Result<()> {
+        let target_dir = self.target_dir().log_unwrap(Step::Link)?;
+        let tmp = TempDir::new("nvptx-link").log(Step::Link, "Cannot create tmp dir")?;
+        let mut bitcodes = Vec::new();
         // extract rlibs using ar x
-        let pat_rlib = format!("{}/target/**/deps/*.rlib", self.path.display());
-        for path in glob(&pat_rlib).unwrap() {
+        for path in glob(&format!("{}/deps/*.rlib", target_dir.display())).log_unwrap(Step::Link)? {
             let path = path.unwrap();
+            // get object archived in rlib
+            let obj_output = String::from_utf8(
+                process::Command::new("ar")
+                    .arg("t")
+                    .arg(&path)
+                    .output()
+                    .log_unwrap(Step::Link)?
+                    .stdout,
+            ).log_unwrap(Step::Link)?;
+            // get only *.o (drop *.z and metadata)
+            let mut objs = obj_output
+                .split('\n')
+                .filter_map(|f| {
+                    let f = f.trim();
+                    if f.ends_with(".o") {
+                        Some(f.to_owned())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            bitcodes.append(&mut objs);
+            // expand to temporal directory
             process::Command::new("ar")
-                .args(&["x", path.file_name().unwrap().to_str().unwrap()])
-                .current_dir(path.parent().unwrap())
+                .arg("x")
+                .arg(path)
+                .current_dir(tmp.path())
                 .check_run(Step::Link)?;
         }
         // link them
-        let pat_rsbc = format!("{}/target/**/deps/*.o", self.path.display());
-        let bcs: Vec<_> = glob(&pat_rsbc)
-            .unwrap()
-            .map(|x| {
-                fs::canonicalize(x.unwrap())
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .to_owned()
-            })
-            .collect();
         process::Command::new(llvm_command("llvm-link")?)
-            .args(&bcs)
-            .args(&["-o", "kernel.bc"])
-            .current_dir(&self.path)
+            .args(&bitcodes)
+            .arg("-o")
+            .arg(target_dir.join("kernel.bc"))
+            .current_dir(&tmp.path())
             .check_run(Step::Link)?;
         // compile bytecode to PTX
         process::Command::new(llvm_command("llc")?)
-            .args(&["-mcpu=sm_20", "kernel.bc", "-o", "kernel.ptx"])
-            .current_dir(&self.path)
+            .args(&["-mcpu=sm_50", "kernel.bc", "-o", "kernel.ptx"])
+            .current_dir(&target_dir)
             .check_run(Step::Link)?;
         Ok(())
     }
 
     pub fn load_ptx(&self) -> Result<String> {
-        let mut f =
-            fs::File::open(self.path.join("kernel.ptx")).log(Step::Load, "kernel.ptx cannot open")?;
+        let target_dir = self.target_dir().log_unwrap(Step::Load)?;
+        let mut f = fs::File::open(target_dir.join("kernel.ptx"))
+            .log(Step::Load, "kernel.ptx cannot open")?;
         let mut res = String::new();
         f.read_to_string(&mut res).unwrap();
         Ok(res)
-    }
-
-    pub fn copy_triplet(&self) -> Result<()> {
-        save_str(
-            &self.path,
-            include_str!("nvptx64-nvidia-cuda.json"),
-            "nvptx64-nvidia-cuda.json",
-        ).log(Step::Ready, "Failed to copy triplet file")
     }
 
     fn clean(&self) {
