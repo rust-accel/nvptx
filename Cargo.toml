@@ -5,10 +5,10 @@ authors = ["Toshiki Teramura <toshiki.teramura@gmail.com>"]
 
 description   = "Rust to PTX compiler using LLVM/NVPTX target"
 documentation = "https://docs.rs/nvptx/"
-repository    = "https://github.com/termoshtt/accel"
-keywords      = ["GPGPU", "CUDA", "proc-macro"]
+repository    = "https://github.com/rust-accel/nvptx"
+keywords      = ["GPGPU", "CUDA", "cli", "LLVM"]
+categories    = ["development-tools", "development-tools::cargo-plugins", "development-tools::build-utils", "development-tools::testing"]
 license       = "MIT"
-categories    = []
 
 [dependencies]
 toml = "0.4.5"
