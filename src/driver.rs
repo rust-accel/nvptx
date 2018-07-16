@@ -11,6 +11,7 @@ use error::*;
 /// Compile Rust string into PTX string
 pub struct Driver {
     path: PathBuf,
+    release: bool,
 }
 
 impl Driver {
@@ -30,7 +31,10 @@ impl Driver {
             path = home.join(path.strip_prefix("~").unwrap());
         }
         fs::create_dir_all(path.join("src")).log(Step::Ready, "Cannot create build directory")?;
-        Ok(Driver { path: path })
+        Ok(Driver {
+            path: path,
+            release: true,
+        })
     }
 
     pub fn path(&self) -> &Path {
@@ -52,14 +56,9 @@ impl Driver {
     }
 
     pub fn build(&self) -> Result<()> {
-        process::Command::new("xargo")
-            .args(&[
-                "+nightly",
-                "rustc",
-                "--release",
-                "--target",
-                "nvptx64-nvidia-cuda",
-            ])
+        process::Command::new("cargo")
+            .args(&["+accel-nvptx", "build"])
+            .arg(if self.release { "--release" } else { "" })
             .current_dir(&self.path)
             .check_run(Step::Build)
     }
