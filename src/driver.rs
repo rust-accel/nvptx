@@ -42,7 +42,6 @@ impl Driver {
     }
 
     pub fn compile(&self) -> Result<String> {
-        self.copy_triplet()?;
         self.build()?;
         self.link()?;
         self.load_ptx()
@@ -57,7 +56,7 @@ impl Driver {
 
     pub fn build(&self) -> Result<()> {
         process::Command::new("cargo")
-            .args(&["+accel-nvptx", "build"])
+            .args(&["+accel-nvptx", "build", "--target", "nvptx64-nvidia-cuda"])
             .arg(if self.release { "--release" } else { "" })
             .current_dir(&self.path)
             .check_run(Step::Build)
@@ -104,14 +103,6 @@ impl Driver {
         let mut res = String::new();
         f.read_to_string(&mut res).unwrap();
         Ok(res)
-    }
-
-    pub fn copy_triplet(&self) -> Result<()> {
-        save_str(
-            &self.path,
-            include_str!("nvptx64-nvidia-cuda.json"),
-            "nvptx64-nvidia-cuda.json",
-        ).log(Step::Ready, "Failed to copy triplet file")
     }
 
     fn clean(&self) {
