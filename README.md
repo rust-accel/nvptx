@@ -36,7 +36,6 @@ Build
 
 You can build your crate using `accel-nvptx` toolchain into a PTX file
 
-
 ```
 nvptx build
 ```
@@ -47,7 +46,6 @@ This consists of following three steps:
 
 ```
 cargo +accel-nvptx build --target nvptx64-nvidia-cuda
-
 ```
 
 - Link rlib into a LLVM bitcode using `llvm-link`
