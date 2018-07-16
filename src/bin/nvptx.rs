@@ -3,13 +3,17 @@ extern crate nvptx;
 #[macro_use]
 extern crate structopt;
 extern crate dirs;
+extern crate failure;
+extern crate tempdir;
 
-use nvptx::error::Result;
+use nvptx::error::*;
 use nvptx::Driver;
 
-use std::env;
+use failure::err_msg;
 use std::path::*;
+use std::{env, fs, process};
 use structopt::StructOpt;
+use tempdir::TempDir;
 
 #[derive(StructOpt, Debug)]
 enum Opt {
@@ -49,8 +53,57 @@ fn get_manifest_path() -> PathBuf {
 ///
 /// This archive has been generated from rust-accel/rust fork
 /// https://github.com/rust-accel/rust
-fn download(_path: &Path) -> Result<()> {
-    // TODO impl
+fn install(path: &Path) -> Result<()> {
+    fs::create_dir_all(path)?;
+    let tmp_dir = TempDir::new("nvptx_install")?;
+    let rustc = "rustc";
+    let rust_std = "rust-std";
+    let rust_doc = "rust-docs";
+    let x86 = "x86_64-unknown-linux-gnu";
+    let nvptx = "nvptx64-nvidia-cuda";
+    let version = "1.28.0-dev";
+    for cmp in &[rustc, rust_std, rust_doc] {
+        for target in &[x86, nvptx] {
+            if (cmp == &rustc) && (target == &nvptx) {
+                // rustc does not work on nvptx
+                continue;
+            }
+            let name = format!("{}-{}-{}", cmp, version, target);
+            let arc = format!("{}.tar.xz", name);
+            let url = format!("https://s3-ap-northeast-1.amazonaws.com/rust-accel/{}", arc);
+
+            // Download using curl
+            eprintln!("Downloading: {}", url);
+            let ec = process::Command::new("curl")
+                .args(&["-o", &arc, &url])
+                .current_dir(tmp_dir.path())
+                .status()?;
+            if !ec.success() {
+                return Err(err_msg("Fail to download"));
+            }
+            // TODO checksum
+
+            // Expand using tar
+            eprintln!("Expanding: {}", name);
+            let ec = process::Command::new("tar")
+                .args(&["xf", &arc])
+                .current_dir(tmp_dir.path())
+                .status()?;
+            if !ec.success() {
+                return Err(err_msg("Fail to expand archive"));
+            }
+
+            // install.sh
+            let ec = process::Command::new("./install.sh")
+                .arg(format!("--prefix={}", path.display()))
+                .current_dir(tmp_dir.path().join(name))
+                .status()?;
+            if !ec.success() {
+                return Err(err_msg("Fail to install"));
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -64,7 +117,7 @@ fn main() -> Result<()> {
             println!("{}", ptx);
         }
         Opt::Install { path } => {
-            download(&path.unwrap_or(dirs::data_dir().unwrap().join("accel-nvptx")))?;
+            install(&path.unwrap_or(dirs::data_dir().unwrap().join("accel-nvptx")))?;
         }
     }
     Ok(())
