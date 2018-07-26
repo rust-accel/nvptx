@@ -20,7 +20,15 @@ use tempdir::TempDir;
 enum Opt {
     /// Compile crate into PTX
     #[structopt(name = "build")]
-    Build {},
+    Build {
+        /// Load generated PTX to stdout
+        #[structopt(short = "l", long = "load")]
+        load: bool,
+    },
+
+    /// Load PTX to stdout
+    #[structopt(name = "load")]
+    Load {},
 
     /// Download and Install nvptx-enabled rustc
     #[structopt(name = "install")]
@@ -115,10 +123,18 @@ fn main() -> nvptx::error::Result<()> {
     let opt = Opt::from_args();
 
     match opt {
-        Opt::Build {} => {
+        Opt::Build { load } => {
             let manifest_path = get_manifest_path();
-            let ptx = Driver::with_path(manifest_path)?.compile()?;
-            println!("{}", ptx);
+            let driver = Driver::with_path(manifest_path)?;
+            driver.compile()?;
+            if load {
+                println!("{}", driver.load_ptx()?);
+            }
+        }
+        Opt::Load {} => {
+            let manifest_path = get_manifest_path();
+            let driver = Driver::with_path(manifest_path)?;
+            println!("{}", driver.load_ptx()?);
         }
         Opt::Install { path } => {
             install(&path.unwrap_or(dirs::data_dir().unwrap().join("accel-nvptx")))
