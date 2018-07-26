@@ -109,6 +109,7 @@ fn install(path: &Path) -> Result<(), failure::Error> {
             }
         }
     }
+    eprintln!("Create accel-nvptx toolchain");
     let ec = process::Command::new("rustup")
         .args(&["toolchain", "link", "accel-nvptx"])
         .arg(path)
@@ -119,12 +120,14 @@ fn install(path: &Path) -> Result<(), failure::Error> {
 
     // Expand rlib into LLVM BC, and link them
     let nvptx_dir = path.join("lib/rustlib/nvptx64-nvidia-cuda/lib");
+    eprintln!("Convert rlibs in {}", nvptx_dir.display());
     for entry in fs::read_dir(&nvptx_dir)? {
         let path = entry?.path();
-        if !path.ends_with(".rlib") {
+        let name = path.file_stem().unwrap();
+        if path.extension().unwrap() != "rlib" {
+            eprintln!("Not rlib: {}", path.display());
             continue;
         }
-        let name = path.file_stem().unwrap();
 
         // `ar xv some.rlib` expand rlib and show its compnent
         let output = process::Command::new("ar")
@@ -144,13 +147,14 @@ fn install(path: &Path) -> Result<(), failure::Error> {
             .args(&bcs)
             .arg("-o")
             .arg(format!("{}.bc", name.to_str().unwrap()))
+            .current_dir(&nvptx_dir)
             .status()?;
         if !ec.success() {
             return Err(err_msg("Re-archive failed"));
         }
         // Remove expanded objects
         for c in &components {
-            fs::remove_file(c)?;
+            fs::remove_file(nvptx_dir.join(c))?;
         }
     }
 
