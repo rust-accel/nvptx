@@ -16,6 +16,7 @@ use structopt::StructOpt;
 use tempdir::TempDir;
 
 #[derive(StructOpt, Debug)]
+#[structopt(raw(setting = "structopt::clap::AppSettings::ColoredHelp"))]
 enum Opt {
     /// Compile crate into PTX
     #[structopt(name = "build")]
