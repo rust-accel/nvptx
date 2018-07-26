@@ -11,6 +11,7 @@ use nvptx::Driver;
 
 use failure::err_msg;
 use std::path::*;
+use std::str::from_utf8;
 use std::{env, fs, process};
 use structopt::StructOpt;
 use tempdir::TempDir;
@@ -114,6 +115,43 @@ fn install(path: &Path) -> Result<(), failure::Error> {
         .status()?;
     if !ec.success() {
         return Err(err_msg("rustup failed"));
+    }
+
+    // Expand rlib into LLVM BC, and link them
+    let nvptx_dir = path.join("lib/rustlib/nvptx64-nvidia-cuda/lib");
+    for entry in fs::read_dir(&nvptx_dir)? {
+        let path = entry?.path();
+        if !path.ends_with(".rlib") {
+            continue;
+        }
+        let name = path.file_stem().unwrap();
+
+        // `ar xv some.rlib` expand rlib and show its compnent
+        let output = process::Command::new("ar")
+            .arg("xv")
+            .arg(&path)
+            .current_dir(&nvptx_dir)
+            .output()?;
+        let components: Vec<_> = from_utf8(&output.stdout)?
+            .lines()
+            .map(|line| line.trim_left_matches("x - "))
+            .collect();
+        let bcs: Vec<_> = components
+            .iter()
+            .filter(|line| line.ends_with(".rcgu.o"))
+            .collect();
+        let ec = process::Command::new("llvm-link")
+            .args(&bcs)
+            .arg("-o")
+            .arg(format!("{}.bc", name.to_str().unwrap()))
+            .status()?;
+        if !ec.success() {
+            return Err(err_msg("Re-archive failed"));
+        }
+        // Remove expanded objects
+        for c in &components {
+            fs::remove_file(c)?;
+        }
     }
 
     Ok(())
