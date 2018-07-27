@@ -15,9 +15,11 @@ extern crate toml;
 mod config;
 mod driver;
 pub mod error;
+mod install;
 mod manifest;
 
 pub use driver::Driver;
+pub use install::install;
 pub use manifest::ManifestGenerator;
 
 use std::io::Write;

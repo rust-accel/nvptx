@@ -163,7 +163,8 @@ fn check_exists(name: &str) -> bool {
         .is_ok()
 }
 
-fn llvm_command(name: &str) -> Result<String> {
+/// Resolve LLVM command name with postfix
+pub(crate) fn llvm_command(name: &str) -> Result<String> {
     let name6 = format!("{}-6.0", name);
     let name7 = format!("{}-7.0", name);
     if check_exists(&name6) {
