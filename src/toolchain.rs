@@ -124,12 +124,12 @@ const RUNTIME_LIBS: [&str; 13] = [
     "unwind",
 ];
 
-pub fn get_compiler_rt(runtimes: &[&str]) -> ResultAny<Vec<PathBuf>> {
+pub fn get_compiler_rt(runtimes: &[String]) -> ResultAny<Vec<PathBuf>> {
     let all = get_all_compiler_rt()?;
     Ok(runtimes
         .iter()
         .filter_map(|rt| {
-            if !RUNTIME_LIBS.contains(rt) {
+            if !RUNTIME_LIBS.contains(&rt.as_str()) {
                 eprintln!("Runtime not supported: {}", rt);
                 return None;
             }
@@ -156,7 +156,7 @@ mod tests {
 
     #[test]
     fn get_core_path() {
-        let rt = get_compiler_rt(&["core"]).unwrap();
+        let rt = get_compiler_rt(&["core".to_string()]).unwrap();
         println!("libcore = {:?}", rt[0]);
         assert_eq!(rt.len(), 1);
     }
