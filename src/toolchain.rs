@@ -1,5 +1,4 @@
 use failure::err_msg;
-use serde_json;
 use std::path::*;
 use std::str::from_utf8;
 use std::{fs, process};
@@ -125,38 +124,6 @@ const RUNTIME_LIBS: [&str; 13] = [
     "test",
     "unwind",
 ];
-
-/// Runtime setting is writen in Cargo.toml like
-///
-/// ```
-/// [package.metadata.nvptx]
-/// runtime = ["core"]
-/// ```
-fn load_runtime_setting() -> ResultAny<Vec<String>> {
-    let output = process::Command::new("cargo")
-        .args(&["metadata", "--no-deps", "--format-version=1"])
-        .output()?;
-    let json = from_utf8(&output.stdout)?;
-    let meta: serde_json::Value = serde_json::from_str(json)?;
-    let meta = &meta["packages"][0]["metadata"];
-    if meta.is_null() {
-        return Ok(Vec::new());
-    }
-    let nvptx = meta["nvptx"].as_object().expect("Invlid nvptx metadata");
-    Ok(match nvptx.get("runtime") {
-        Some(rt) => {
-            let rt = rt.as_array().expect("nvptx.runtime must be array");
-            rt.iter()
-                .map(|name| {
-                    name.as_str()
-                        .expect("Component of nvptx.runtime must be string")
-                        .to_string()
-                })
-                .collect()
-        }
-        None => Vec::new(),
-    })
-}
 
 pub fn get_compiler_rt(runtimes: &[String]) -> ResultAny<Vec<PathBuf>> {
     let all = get_all_compiler_rt()?;

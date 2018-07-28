@@ -1,5 +1,6 @@
 use dirs::home_dir;
 use failure::err_msg;
+use serde_json::{self, Value};
 use std::io::Read;
 use std::path::*;
 use std::str::from_utf8;
@@ -13,7 +14,6 @@ use error::*;
 pub struct Driver {
     path: PathBuf,
     release: bool,
-    runtime: Vec<String>,
 }
 
 impl Driver {
@@ -36,7 +36,6 @@ impl Driver {
         Ok(Driver {
             path: path,
             release: true,
-            runtime: Vec::new(),
         })
     }
 
@@ -89,10 +88,13 @@ impl Driver {
                 }
             })
             .collect();
+        let rt = self
+            .get_runtime_setting()
+            .log(Step::Link, "Fail to load package.metadata.nvptx.runtime")?;
         // link them
         process::Command::new(llvm_command("llvm-link").log(Step::Link, "llvm-link not found")?)
             .args(&bitcodes.log(Step::Link, "Fail to convert to LLVM BC")?)
-            .args(get_compiler_rt(&self.runtime).log(Step::Link, "Fail to get copiler-rt libs")?)
+            .args(get_compiler_rt(&rt).log(Step::Link, "Fail to get copiler-rt libs")?)
             .arg("-o")
             .arg(target_dir.join("kernel.bc"))
             .current_dir(&target_dir)
@@ -132,6 +134,41 @@ impl Driver {
         if let Err(e) = result {
             warn!("Format failed: {:?}", e);
         }
+    }
+
+    /// Runtime setting is writen in Cargo.toml like
+    ///
+    /// ```text
+    /// [package.metadata.nvptx]
+    /// runtime = ["core"]
+    /// ```
+    fn get_runtime_setting(&self) -> ResultAny<Vec<String>> {
+        let output = process::Command::new("cargo")
+            .args(&["metadata", "--no-deps", "--format-version=1"])
+            .current_dir(&self.path)
+            .output()?;
+        let json = from_utf8(&output.stdout)?;
+        let meta: Value = serde_json::from_str(json)?;
+        let meta = &meta["packages"][0]["metadata"];
+        if meta.is_null() {
+            return Ok(Vec::new());
+        }
+        let nvptx = meta["nvptx"]
+            .as_object()
+            .ok_or(err_msg("Invlid nvptx metadata"))?;
+        Ok(match nvptx.get("runtime") {
+            Some(rt) => {
+                let rt = rt.as_array().ok_or(err_msg("nvptx.runtime must be array"))?;
+                rt.iter()
+                    .map(|name| {
+                        name.as_str()
+                            .ok_or(err_msg("Component of nvptx.runtime must be string"))
+                            .map(|s| s.to_string())
+                    })
+                    .collect::<ResultAny<Vec<String>>>()?
+            }
+            None => Vec::new(),
+        })
     }
 }
 
