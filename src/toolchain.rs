@@ -94,19 +94,70 @@ fn get_nvptx_lib_path() -> ResultAny<PathBuf> {
     Ok(get_toolchain_path()?.join("lib/rustlib/nvptx64-nvidia-cuda/lib"))
 }
 
-pub fn get_compiler_rt() -> ResultAny<Vec<PathBuf>> {
+fn get_all_compiler_rt() -> ResultAny<Vec<PathBuf>> {
     let nvptx_dir = get_nvptx_lib_path()?;
-    eprintln!("nvptx-dir = {:?}", nvptx_dir);
     Ok(fs::read_dir(&nvptx_dir)?
         .filter_map(|entry| {
             let path = entry.unwrap().path();
-            if path.file_stem()?.to_str()?.contains("unwind") {
-                return None;
-            }
             if path.extension()? != "bc" {
                 return None;
             }
             Some(path)
         })
         .collect())
+}
+
+/// Installed runtime libraries
+const RUNTIME_LIBS: [&str; 13] = [
+    "alloc",
+    "alloc_system",
+    "compiler_builtins",
+    "core",
+    "getopts",
+    "libc",
+    "panic_abort",
+    "panic_unwind",
+    "std",
+    "std_unicode",
+    "term",
+    "test",
+    "unwind",
+];
+
+pub fn get_compiler_rt(runtimes: &[&str]) -> ResultAny<Vec<PathBuf>> {
+    let all = get_all_compiler_rt()?;
+    Ok(runtimes
+        .iter()
+        .filter_map(|rt| {
+            if !RUNTIME_LIBS.contains(rt) {
+                eprintln!("Runtime not supported: {}", rt);
+                return None;
+            }
+            for path in &all {
+                if path.file_stem()?.to_str()?.contains(rt) {
+                    return Some(path.clone());
+                }
+            }
+            unreachable!("Corresponding BC does not found");
+        })
+        .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all_compiler_rt() {
+        let rt = get_all_compiler_rt().unwrap();
+        println!("Compiler runtimes = {:?}", rt);
+        assert_eq!(rt.len(), 13);
+    }
+
+    #[test]
+    fn get_core_path() {
+        let rt = get_compiler_rt(&["core"]).unwrap();
+        println!("libcore = {:?}", rt[0]);
+        assert_eq!(rt.len(), 1);
+    }
 }

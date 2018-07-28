@@ -90,7 +90,7 @@ impl Driver {
         // link them
         process::Command::new(llvm_command("llvm-link").log(Step::Link, "llvm-link not found")?)
             .args(&bitcodes.log(Step::Link, "Fail to convert to LLVM BC")?)
-            .args(get_compiler_rt().log(Step::Link, "Fail to get copiler-rt libs")?)
+            .args(get_compiler_rt(&[]).log(Step::Link, "Fail to get copiler-rt libs")?)
             .arg("-o")
             .arg(target_dir.join("kernel.bc"))
             .current_dir(&target_dir)
