@@ -1,6 +1,5 @@
 use dirs::home_dir;
 use failure::err_msg;
-use glob::glob;
 use std::io::Read;
 use std::path::*;
 use std::str::from_utf8;
@@ -77,42 +76,21 @@ impl Driver {
     pub fn link(&self) -> Result<()> {
         let target_dir = self.target_dir().log_unwrap(Step::Link)?;
         let tmp = TempDir::new("nvptx-link").log(Step::Link, "Cannot create tmp dir")?;
-        let mut bitcodes = Vec::new();
-        // extract rlibs using ar x
-        for path in glob(&format!("{}/deps/*.rlib", target_dir.display())).log_unwrap(Step::Link)? {
-            let path = path.unwrap();
-            // get object archived in rlib
-            let obj_output = String::from_utf8(
-                process::Command::new("ar")
-                    .arg("t")
-                    .arg(&path)
-                    .output()
-                    .log_unwrap(Step::Link)?
-                    .stdout,
-            ).log_unwrap(Step::Link)?;
-            // get only *.o (drop *.z and metadata)
-            let mut objs = obj_output
-                .split('\n')
-                .filter_map(|f| {
-                    let f = f.trim();
-                    if f.ends_with(".o") {
-                        Some(f.to_owned())
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            bitcodes.append(&mut objs);
-            // expand to temporal directory
-            process::Command::new("ar")
-                .arg("x")
-                .arg(path)
-                .current_dir(tmp.path())
-                .check_run(Step::Link)?;
-        }
+        let bitcodes: ResultAny<Vec<PathBuf>> = fs::read_dir(target_dir.join("deps"))
+            .log(Step::Link, "deps dir not found")?
+            .filter_map(|entry| {
+                let path = entry.unwrap().path();
+                if path.ends_with(".rlib") {
+                    Some(path)
+                } else {
+                    None
+                }
+            })
+            .map(|path| rlib2bc(&path))
+            .collect();
         // link them
         process::Command::new(llvm_command("llvm-link").log_unwrap(Step::Link)?)
-            .args(&bitcodes)
+            .args(&bitcodes.log_unwrap(Step::Link)?)
             .arg("-o")
             .arg(target_dir.join("kernel.bc"))
             .current_dir(&tmp.path())
@@ -155,8 +133,8 @@ impl Driver {
     }
 }
 
-/// Expand ar archive into a linked LLVM/BC binary
-fn rlib2bc(path: &Path) -> ResultAny<PathBuf> {
+/// Expand rlib into a linked LLVM/BC binary (*.bc)
+pub fn rlib2bc(path: &Path) -> ResultAny<PathBuf> {
     let name = path.file_stem().unwrap();
     let dir = TempDir::new("rlib2bc")?;
     let target = PathBuf::from(format!("{}.bc", name.to_str().unwrap()));
