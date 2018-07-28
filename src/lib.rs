@@ -9,6 +9,7 @@ extern crate serde_derive;
 extern crate dirs;
 extern crate glob;
 extern crate serde;
+extern crate serde_json;
 extern crate tempdir;
 extern crate toml;
 
