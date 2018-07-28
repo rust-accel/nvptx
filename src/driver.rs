@@ -148,15 +148,11 @@ impl Driver {
             .current_dir(&self.path)
             .output()?;
         let json = from_utf8(&output.stdout)?;
-        let meta: Value = serde_json::from_str(json)?;
-        let meta = &meta["packages"][0]["metadata"];
-        if meta.is_null() {
+        if json.len() == 0 {
             return Ok(Vec::new());
         }
-        let nvptx = meta["nvptx"]
-            .as_object()
-            .ok_or(err_msg("Invlid nvptx metadata"))?;
-        Ok(match nvptx.get("runtime") {
+        let meta: Value = serde_json::from_str(json)?;
+        Ok(match meta.pointer("/packages/0/metadata/nvptx/runtime") {
             Some(rt) => {
                 let rt = rt.as_array().ok_or(err_msg("nvptx.runtime must be array"))?;
                 rt.iter()
@@ -231,5 +227,31 @@ fn llvm_command(name: &str) -> ResultAny<String> {
         Err(err_msg(
             "LLVM Command {} or postfixed by *-6.0 or *-7.0 are not found.",
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use manifest::ManifestGenerator;
+
+    #[test]
+    fn get_runtime_here() {
+        let driver = Driver::with_path(".").unwrap();
+        let rt = driver.get_runtime_setting().unwrap();
+        assert_eq!(rt, vec!["core".to_string()]);
+    }
+
+    #[test]
+    fn get_runtime_tmp() {
+        let dri = Driver::new().unwrap();
+        ManifestGenerator::new(dri.path())
+            .add_crate_with_version("accel-core", "0.2.0-alpha")
+            .generate()
+            .unwrap();
+        let rt = dri
+            .get_runtime_setting()
+            .expect("Failed to get runtime setting");
+        assert_eq!(rt, Vec::<String>::new());
     }
 }
