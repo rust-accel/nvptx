@@ -1,15 +1,18 @@
-use failure::{self, err_msg};
+use failure::err_msg;
 use std::path::*;
+use std::str::from_utf8;
 use std::{fs, process};
 use tempdir::TempDir;
 
+use super::TOOLCHAIN_NAME;
 use driver::rlib2bc;
+use error::ResultAny;
 
 /// Download nvptx-enable rustc from AWS S3
 ///
 /// This archive has been generated from rust-accel/rust fork
 /// https://github.com/rust-accel/rust
-pub fn install(path: &Path) -> Result<(), failure::Error> {
+pub fn install(path: &Path) -> ResultAny<()> {
     fs::create_dir_all(path)?;
     let tmp_dir = TempDir::new("nvptx_install")?;
     let rustc = "rustc";
@@ -59,9 +62,9 @@ pub fn install(path: &Path) -> Result<(), failure::Error> {
             }
         }
     }
-    eprintln!("Create accel-nvptx toolchain");
+    eprintln!("Create {} toolchain", TOOLCHAIN_NAME);
     let ec = process::Command::new("rustup")
-        .args(&["toolchain", "link", "accel-nvptx"])
+        .args(&["toolchain", "link", TOOLCHAIN_NAME])
         .arg(path)
         .status()?;
     if !ec.success() {
@@ -69,16 +72,41 @@ pub fn install(path: &Path) -> Result<(), failure::Error> {
     }
 
     // Expand rlib into LLVM BC, and link them
-    let nvptx_dir = path.join("lib/rustlib/nvptx64-nvidia-cuda/lib");
+    let nvptx_dir = get_nvptx_lib_path()?;
     eprintln!("Convert rlibs in {}", nvptx_dir.display());
     for entry in fs::read_dir(&nvptx_dir)? {
         let path = entry?.path();
-        if path.extension().unwrap() != "rlib" {
-            eprintln!("Not rlib: {}", path.display());
-            continue;
+        if path.ends_with(".rlib") {
+            rlib2bc(&path)?;
         }
-        rlib2bc(&path)?;
     }
-
     Ok(())
+}
+
+fn get_toolchain_path() -> ResultAny<PathBuf> {
+    let output = process::Command::new("rustup")
+        .args(&["run", TOOLCHAIN_NAME, "rustc", "--print", "sysroot"])
+        .output()?;
+    Ok(PathBuf::from(from_utf8(&output.stdout)?.trim()))
+}
+
+fn get_nvptx_lib_path() -> ResultAny<PathBuf> {
+    Ok(get_toolchain_path()?.join("lib/rustlib/nvptx64-nvidia-cuda/lib"))
+}
+
+pub fn get_compiler_rt() -> ResultAny<Vec<PathBuf>> {
+    let nvptx_dir = get_nvptx_lib_path()?;
+    eprintln!("nvptx-dir = {:?}", nvptx_dir);
+    Ok(fs::read_dir(&nvptx_dir)?
+        .filter_map(|entry| {
+            let path = entry.unwrap().path();
+            if path.file_stem()?.to_str()?.contains("unwind") {
+                return None;
+            }
+            if path.extension()? != "bc" {
+                return None;
+            }
+            Some(path)
+        })
+        .collect())
 }

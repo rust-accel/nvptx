@@ -6,7 +6,7 @@ use std::str::from_utf8;
 use std::{fs, io, process};
 use tempdir::TempDir;
 
-use super::save_str;
+use super::{get_compiler_rt, save_str, TOOLCHAIN_NAME};
 use error::*;
 
 /// Compile Rust string into PTX string
@@ -18,7 +18,7 @@ pub struct Driver {
 impl Driver {
     /// Create builder on /tmp
     pub fn new() -> Result<Self> {
-        let path = TempDir::new("accel-nvptx")
+        let path = TempDir::new("nvptx-driver")
             .expect("Failed to create temporal directory")
             .into_path();
         Self::with_path(&path)
@@ -58,7 +58,8 @@ impl Driver {
 
     pub fn build(&self) -> Result<()> {
         process::Command::new("cargo")
-            .args(&["+accel-nvptx", "build", "--target", "nvptx64-nvidia-cuda"])
+            .arg(format!("+{}", TOOLCHAIN_NAME))
+            .args(&["build", "--target", "nvptx64-nvidia-cuda"])
             .arg(if self.release { "--release" } else { "" })
             .current_dir(&self.path)
             .check_run(Step::Build)
@@ -75,25 +76,24 @@ impl Driver {
     /// Link rlib into a single PTX file
     pub fn link(&self) -> Result<()> {
         let target_dir = self.target_dir().log_unwrap(Step::Link)?;
-        let tmp = TempDir::new("nvptx-link").log(Step::Link, "Cannot create tmp dir")?;
         let bitcodes: ResultAny<Vec<PathBuf>> = fs::read_dir(target_dir.join("deps"))
             .log(Step::Link, "deps dir not found")?
             .filter_map(|entry| {
                 let path = entry.unwrap().path();
-                if path.ends_with(".rlib") {
-                    Some(path)
+                if path.extension()? == "rlib" {
+                    Some(rlib2bc(&path))
                 } else {
                     None
                 }
             })
-            .map(|path| rlib2bc(&path))
             .collect();
         // link them
-        process::Command::new(llvm_command("llvm-link").log_unwrap(Step::Link)?)
-            .args(&bitcodes.log_unwrap(Step::Link)?)
+        process::Command::new(llvm_command("llvm-link").log(Step::Link, "llvm-link not found")?)
+            .args(&bitcodes.log(Step::Link, "Fail to convert to LLVM BC")?)
+            .args(get_compiler_rt().log(Step::Link, "Fail to get copiler-rt libs")?)
             .arg("-o")
             .arg(target_dir.join("kernel.bc"))
-            .current_dir(&tmp.path())
+            .current_dir(&target_dir)
             .check_run(Step::Link)?;
         // compile bytecode to PTX
         process::Command::new(llvm_command("llc").log_unwrap(Step::Link)?)
@@ -135,9 +135,10 @@ impl Driver {
 
 /// Expand rlib into a linked LLVM/BC binary (*.bc)
 pub fn rlib2bc(path: &Path) -> ResultAny<PathBuf> {
+    let parent = path.parent().unwrap_or(Path::new(""));
     let name = path.file_stem().unwrap();
     let dir = TempDir::new("rlib2bc")?;
-    let target = PathBuf::from(format!("{}.bc", name.to_str().unwrap()));
+    let target = parent.join(format!("{}.bc", name.to_str().unwrap()));
 
     // `ar xv some.rlib` expand rlib and show its compnent
     let output = process::Command::new("ar")
@@ -145,14 +146,16 @@ pub fn rlib2bc(path: &Path) -> ResultAny<PathBuf> {
         .arg(&path)
         .current_dir(&dir)
         .output()?;
+    // trim ar output
     let components: Vec<_> = from_utf8(&output.stdout)?
         .lines()
         .map(|line| line.trim_left_matches("x - "))
         .collect();
+    // filter LLVM BC files
     let bcs: Vec<_> = components
         .iter()
         .filter(|line| line.ends_with(".rcgu.o"))
-        .collect();
+        .collect(); // FIXME filtering using suffix will cause compiler dependency
     let ec = process::Command::new(llvm_command("llvm-link")?)
         .args(&bcs)
         .arg("-o")
