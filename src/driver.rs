@@ -1,7 +1,9 @@
 use dirs::home_dir;
+use failure::err_msg;
 use glob::glob;
 use std::io::Read;
 use std::path::*;
+use std::str::from_utf8;
 use std::{fs, io, process};
 use tempdir::TempDir;
 
@@ -109,14 +111,14 @@ impl Driver {
                 .check_run(Step::Link)?;
         }
         // link them
-        process::Command::new(llvm_command("llvm-link")?)
+        process::Command::new(llvm_command("llvm-link").log_unwrap(Step::Link)?)
             .args(&bitcodes)
             .arg("-o")
             .arg(target_dir.join("kernel.bc"))
             .current_dir(&tmp.path())
             .check_run(Step::Link)?;
         // compile bytecode to PTX
-        process::Command::new(llvm_command("llc")?)
+        process::Command::new(llvm_command("llc").log_unwrap(Step::Link)?)
             .args(&["-mcpu=sm_50", "kernel.bc", "-o", "kernel.ptx"])
             .current_dir(&target_dir)
             .check_run(Step::Link)?;
@@ -153,6 +155,38 @@ impl Driver {
     }
 }
 
+/// Expand ar archive into a linked LLVM/BC binary
+fn rlib2bc(path: &Path) -> ResultAny<PathBuf> {
+    let name = path.file_stem().unwrap();
+    let dir = TempDir::new("rlib2bc")?;
+    let target = PathBuf::from(format!("{}.bc", name.to_str().unwrap()));
+
+    // `ar xv some.rlib` expand rlib and show its compnent
+    let output = process::Command::new("ar")
+        .arg("xv")
+        .arg(&path)
+        .current_dir(&dir)
+        .output()?;
+    let components: Vec<_> = from_utf8(&output.stdout)?
+        .lines()
+        .map(|line| line.trim_left_matches("x - "))
+        .collect();
+    let bcs: Vec<_> = components
+        .iter()
+        .filter(|line| line.ends_with(".rcgu.o"))
+        .collect();
+    let ec = process::Command::new(llvm_command("llvm-link")?)
+        .args(&bcs)
+        .arg("-o")
+        .arg(&target)
+        .current_dir(&dir)
+        .status()?;
+    if !ec.success() {
+        return Err(err_msg("Re-archive failed"));
+    }
+    Ok(target)
+}
+
 /// Check if the command exists using "--help" flag
 fn check_exists(name: &str) -> bool {
     process::Command::new(name)
@@ -164,7 +198,7 @@ fn check_exists(name: &str) -> bool {
 }
 
 /// Resolve LLVM command name with postfix
-pub(crate) fn llvm_command(name: &str) -> Result<String> {
+fn llvm_command(name: &str) -> ResultAny<String> {
     let name6 = format!("{}-6.0", name);
     let name7 = format!("{}-7.0", name);
     if check_exists(&name6) {
@@ -174,8 +208,8 @@ pub(crate) fn llvm_command(name: &str) -> Result<String> {
     } else if check_exists(&name) {
         Ok(name.into())
     } else {
-        Err(CompileError::LLVMCommandNotFound {
-            command: name.into(),
-        }.into())
+        Err(err_msg(
+            "LLVM Command {} or postfixed by *-6.0 or *-7.0 are not found.",
+        ))
     }
 }
