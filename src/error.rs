@@ -23,6 +23,7 @@ pub enum CompileError {
         command: String,
         error_code: i32,
     },
+
     #[fail(
         display = "External command {} failed during {:?}. Please ensure it is installed.",
         command,
@@ -33,11 +34,7 @@ pub enum CompileError {
         command: String,
         error: io::Error,
     },
-    #[fail(
-        display = "LLVM Command {} or postfixed by *-6.0 or *-7.0 are not found.",
-        command,
-    )]
-    LLVMCommandNotFound { command: String },
+
     #[fail(
         display = "Error during {:?} step: {:?}, error: {:?}",
         step,
@@ -60,6 +57,7 @@ pub fn err_msg(step: Step, comment: &str) -> CompileError {
 }
 
 pub type Result<T> = ::std::result::Result<T, CompileError>;
+pub type ResultAny<T> = ::std::result::Result<T, failure::Error>;
 
 pub trait Logging {
     type T;
