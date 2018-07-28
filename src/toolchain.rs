@@ -76,7 +76,8 @@ pub fn install(path: &Path) -> ResultAny<()> {
     eprintln!("Convert rlibs in {}", nvptx_dir.display());
     for entry in fs::read_dir(&nvptx_dir)? {
         let path = entry?.path();
-        if path.ends_with(".rlib") {
+        if path.extension().unwrap() == "rlib" {
+            eprintln!(" - {}", path.display());
             rlib2bc(&path)?;
         }
     }
