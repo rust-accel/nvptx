@@ -31,7 +31,11 @@ nightly-x86_64-unknown-linux-gnu (default)
 accel-nvptx
 ```
 
-Build
+This toolchain is built from
+  - [rust-accel/rust](https://github.com/rust-accel/rust)
+  - [rust-accel/libc](https://github.com/rust-accel/libc)
+
+Build crate to nvptx64-nvidia-cuda target
 ------
 
 You can build your crate using `accel-nvptx` toolchain into a PTX file
@@ -50,3 +54,15 @@ cargo +accel-nvptx build --target nvptx64-nvidia-cuda
 
 - Link rlib into a LLVM bitcode using `llvm-link`
 - Compile LLVM bitcode into PTX using `llc`
+
+You can load the PTX file into your stdout using
+
+```
+nvptx build --load
+```
+
+or
+
+```
+nvptx load
+```
