@@ -12,6 +12,13 @@ pub struct Crate {
 }
 
 impl Crate {
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.into(),
+            version: None,
+            path: None,
+        }
+    }
     pub fn name(&self) -> String {
         self.name.clone()
     }
@@ -31,20 +38,20 @@ impl Crate {
     }
 }
 
-pub struct ManifestGenerator {
+pub struct Generator {
     path: PathBuf,
     crates: Vec<Crate>,
 }
 
-impl ManifestGenerator {
+impl Generator {
     pub fn new<P: AsRef<Path>>(path: P) -> Self {
-        ManifestGenerator {
+        Generator {
             path: path.as_ref().to_owned(),
             crates: Vec::new(),
         }
     }
 
-    pub fn add_crate(mut self, name: &str) -> Self {
+    pub fn add_crate(&mut self, name: &str) -> &mut Self {
         self.crates.push(Crate {
             name: name.to_string(),
             version: None,
@@ -53,7 +60,7 @@ impl ManifestGenerator {
         self
     }
 
-    pub fn add_crate_with_version(mut self, name: &str, version: &str) -> Self {
+    pub fn add_crate_with_version(&mut self, name: &str, version: &str) -> &mut Self {
         self.crates.push(Crate {
             name: name.to_string(),
             version: Some(version.to_string()),
@@ -62,7 +69,7 @@ impl ManifestGenerator {
         self
     }
 
-    pub fn add_crate_with_path<P: AsRef<Path>>(mut self, name: &str, path: P) -> Self {
+    pub fn add_crate_with_path<P: AsRef<Path>>(&mut self, name: &str, path: P) -> &mut Self {
         self.crates.push(Crate {
             name: name.to_string(),
             version: None,
@@ -72,7 +79,7 @@ impl ManifestGenerator {
     }
 
     /// Generate Cargo.toml
-    pub fn generate(self) -> Result<()> {
+    pub fn generate(&self) -> Result<()> {
         let setting = CargoTOML::from_crates(&self.crates);
         save_str(&self.path, &setting.as_toml(), "Cargo.toml")
             .log(Step::Ready, "Failed to write Cargo.toml")?;

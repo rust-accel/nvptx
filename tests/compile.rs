@@ -18,7 +18,7 @@ pub unsafe extern "ptx-kernel" fn add(a: *const f64, b: *const f64, c: *mut f64,
 #[test]
 fn compile_tmp() {
     let dri = Driver::new().unwrap();
-    ManifestGenerator::new(dri.path())
+    manifest::Generator::new(dri.path())
         .add_crate_with_version("accel-core", "0.2.0-alpha")
         .generate()
         .unwrap();
@@ -29,7 +29,7 @@ fn compile_tmp() {
 #[test]
 fn compile_path() {
     let dri = Driver::with_path("~/tmp/rust2ptx").unwrap();
-    ManifestGenerator::new(dri.path())
+    manifest::Generator::new(dri.path())
         .add_crate_with_version("accel-core", "0.2.0-alpha")
         .generate()
         .unwrap();
