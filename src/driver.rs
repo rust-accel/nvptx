@@ -233,7 +233,7 @@ fn llvm_command(name: &str) -> ResultAny<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use manifest::ManifestGenerator;
+    use manifest;
 
     #[test]
     fn get_runtime_here() {
@@ -245,10 +245,8 @@ mod tests {
     #[test]
     fn get_runtime_tmp() {
         let dri = Driver::new().unwrap();
-        ManifestGenerator::new(dri.path())
-            .add_crate_with_version("accel-core", "0.2.0-alpha")
-            .generate()
-            .unwrap();
+        let core = manifest::Crate::new("accel-core", "0.2.0-alpha");
+        manifest::generate(dri.path(), &[core]).unwrap();
         let rt = dri
             .get_runtime_setting()
             .expect("Failed to get runtime setting");

@@ -1,81 +1,125 @@
+use std::collections::HashMap;
 use std::path::*;
+use toml;
 
 use super::save_str;
-use config::CargoTOML;
 use error::*;
 
 #[derive(Debug, Clone)]
 pub struct Crate {
-    name: String,
-    version: Option<String>,
-    path: Option<PathBuf>,
+    pub name: String,
+    pub version: Option<String>,
+    pub path: Option<PathBuf>,
 }
 
 impl Crate {
-    pub fn name(&self) -> String {
-        self.name.clone()
+    pub fn latest(name: &str) -> Self {
+        Self {
+            name: name.into(),
+            version: None,
+            path: None,
+        }
     }
 
-    pub fn version(&self) -> String {
-        self.version.clone().unwrap_or("*".to_string())
+    pub fn new(name: &str, version: &str) -> Self {
+        Self {
+            name: name.into(),
+            version: Some(version.into()),
+            path: None,
+        }
     }
 
-    pub fn path_str(&self) -> Option<String> {
-        match &self.path {
-            Some(path) => {
-                let s = path.to_str()?;
-                Some(s.to_owned())
-            }
-            None => None,
+    pub fn with_path<P: AsRef<Path>>(name: &str, path: P) -> Self {
+        Self {
+            name: name.into(),
+            version: None,
+            path: Some(path.as_ref().into()),
         }
     }
 }
 
-pub struct ManifestGenerator {
-    path: PathBuf,
-    crates: Vec<Crate>,
+/// Generate Cargo.toml
+pub fn generate<P: AsRef<Path>>(path: P, crates: &[Crate]) -> Result<()> {
+    let setting = CargoTOML::from_crates(&crates);
+    save_str(&path, &setting.as_toml(), "Cargo.toml")
+        .log(Step::Ready, "Failed to write Cargo.toml")?;
+    Ok(())
 }
 
-impl ManifestGenerator {
-    pub fn new<P: AsRef<Path>>(path: P) -> Self {
-        ManifestGenerator {
-            path: path.as_ref().to_owned(),
-            crates: Vec::new(),
+#[derive(Serialize)]
+struct CargoTOML {
+    package: Package,
+    profile: Profile,
+    dependencies: Dependencies,
+}
+
+impl CargoTOML {
+    pub fn from_crates(crates: &[Crate]) -> Self {
+        let dependencies = crates
+            .iter()
+            .cloned()
+            .map(|c| {
+                let name = c.name;
+                let version = c.version.unwrap_or("*".to_string());
+                let path = c.path.map(|p| p.to_str().unwrap().into());
+                (name, CrateInfo { version, path })
+            })
+            .collect();
+        CargoTOML {
+            package: Package::default(),
+            profile: Profile::default(),
+            dependencies,
         }
     }
 
-    pub fn add_crate(mut self, name: &str) -> Self {
-        self.crates.push(Crate {
-            name: name.to_string(),
-            version: None,
-            path: None,
-        });
-        self
-    }
-
-    pub fn add_crate_with_version(mut self, name: &str, version: &str) -> Self {
-        self.crates.push(Crate {
-            name: name.to_string(),
-            version: Some(version.to_string()),
-            path: None,
-        });
-        self
-    }
-
-    pub fn add_crate_with_path<P: AsRef<Path>>(mut self, name: &str, path: P) -> Self {
-        self.crates.push(Crate {
-            name: name.to_string(),
-            version: None,
-            path: Some(path.as_ref().to_owned()),
-        });
-        self
-    }
-
-    /// Generate Cargo.toml
-    pub fn generate(self) -> Result<()> {
-        let setting = CargoTOML::from_crates(&self.crates);
-        save_str(&self.path, &setting.as_toml(), "Cargo.toml")
-            .log(Step::Ready, "Failed to write Cargo.toml")?;
-        Ok(())
+    pub fn as_toml(&self) -> String {
+        toml::to_string(&self).unwrap()
     }
 }
+
+#[derive(Serialize)]
+struct Package {
+    name: String,
+    version: String,
+}
+
+impl Default for Package {
+    fn default() -> Self {
+        Package {
+            name: "ptx-builder".to_string(),
+            version: "0.1.0".to_string(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct Profile {
+    dev: DevProfile,
+}
+
+impl Default for Profile {
+    fn default() -> Self {
+        Profile {
+            dev: DevProfile::default(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct DevProfile {
+    debug: bool,
+}
+
+impl Default for DevProfile {
+    fn default() -> Self {
+        DevProfile { debug: false }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct CrateInfo {
+    pub path: Option<String>,
+    pub version: String,
+}
+
+type Dependencies = HashMap<String, CrateInfo>;

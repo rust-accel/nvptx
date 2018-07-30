@@ -13,14 +13,12 @@ extern crate serde_json;
 extern crate tempdir;
 extern crate toml;
 
-mod config;
 mod driver;
 pub mod error;
-mod manifest;
+pub mod manifest;
 mod toolchain;
 
 pub use driver::Driver;
-pub use manifest::ManifestGenerator;
 pub use toolchain::{get_compiler_rt, install};
 
 use std::io::Write;
