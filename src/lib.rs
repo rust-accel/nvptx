@@ -13,7 +13,6 @@ extern crate serde_json;
 extern crate tempdir;
 extern crate toml;
 
-mod config;
 mod driver;
 pub mod error;
 pub mod manifest;

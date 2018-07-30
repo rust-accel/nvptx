@@ -18,21 +18,17 @@ pub unsafe extern "ptx-kernel" fn add(a: *const f64, b: *const f64, c: *mut f64,
 #[test]
 fn compile_tmp() {
     let dri = Driver::new().unwrap();
-    manifest::Generator::new(dri.path())
-        .add_crate_with_version("accel-core", "0.2.0-alpha")
-        .generate()
-        .unwrap();
+    let core = manifest::Crate::new("accel-core", "0.2.0-alpha");
+    manifest::generate(dri.path(), &[core]).unwrap();
     let ptx = dri.compile_str(GPU_CODE).unwrap();
     println!("PTX = {:?}", ptx);
 }
 
 #[test]
 fn compile_path() {
-    let dri = Driver::with_path("~/tmp/rust2ptx").unwrap();
-    manifest::Generator::new(dri.path())
-        .add_crate_with_version("accel-core", "0.2.0-alpha")
-        .generate()
-        .unwrap();
+    let dri = Driver::new().unwrap();
+    let core = manifest::Crate::new("accel-core", "0.2.0-alpha");
+    manifest::generate(dri.path(), &[core]).unwrap();
     let ptx = dri.compile_str(GPU_CODE).unwrap();
     println!("PTX = {:?}", ptx);
 }
