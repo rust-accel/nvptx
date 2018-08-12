@@ -7,7 +7,7 @@ use std::str::from_utf8;
 use std::{fs, io, process};
 use tempdir::TempDir;
 
-use super::{get_compiler_rt, save_str, TOOLCHAIN_NAME};
+use super::{bitcode, get_compiler_rt, save_str, TOOLCHAIN_NAME};
 use error::*;
 
 /// Compile Rust string into PTX string
@@ -98,6 +98,8 @@ impl Driver {
             .arg(target_dir.join("kernel.bc"))
             .current_dir(&target_dir)
             .check_run(Step::Link)?;
+        // TODO opt
+        let ptx_funcs = bitcode::get_ptx_functions(&target_dir.join("kernel.bc"));
         // compile bytecode to PTX
         process::Command::new(llvm_command("llc").log_unwrap(Step::Link)?)
             .args(&["-mcpu=sm_50", "kernel.bc", "-o", "kernel.ptx"])

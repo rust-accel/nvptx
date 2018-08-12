@@ -8,11 +8,13 @@ extern crate failure;
 extern crate serde_derive;
 extern crate dirs;
 extern crate glob;
+extern crate llvm_sys;
 extern crate serde;
 extern crate serde_json;
 extern crate tempdir;
 extern crate toml;
 
+mod bitcode;
 mod driver;
 pub mod error;
 pub mod manifest;
