@@ -104,8 +104,7 @@ fn get_all_compiler_rt() -> ResultAny<Vec<PathBuf>> {
                 return None;
             }
             Some(path)
-        })
-        .collect())
+        }).collect())
 }
 
 /// Installed runtime libraries
@@ -140,8 +139,7 @@ pub fn get_compiler_rt(runtimes: &[String]) -> ResultAny<Vec<PathBuf>> {
                 }
             }
             unreachable!("Corresponding BC does not found");
-        })
-        .collect())
+        }).collect())
 }
 
 #[cfg(test)]

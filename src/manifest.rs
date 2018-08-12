@@ -63,8 +63,7 @@ impl CargoTOML {
                 let version = c.version.unwrap_or("*".to_string());
                 let path = c.path.map(|p| p.to_str().unwrap().into());
                 (name, CrateInfo { version, path })
-            })
-            .collect();
+            }).collect();
         CargoTOML {
             package: Package::default(),
             profile: Profile::default(),

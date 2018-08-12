@@ -86,8 +86,7 @@ impl Driver {
                 } else {
                     None
                 }
-            })
-            .collect();
+            }).collect();
         let rt = self
             .get_runtime_setting()
             .log(Step::Link, "Fail to load package.metadata.nvptx.runtime")?;
@@ -154,14 +153,15 @@ impl Driver {
         let meta: Value = serde_json::from_str(json)?;
         Ok(match meta.pointer("/packages/0/metadata/nvptx/runtime") {
             Some(rt) => {
-                let rt = rt.as_array().ok_or(err_msg("nvptx.runtime must be array"))?;
+                let rt = rt
+                    .as_array()
+                    .ok_or(err_msg("nvptx.runtime must be array"))?;
                 rt.iter()
                     .map(|name| {
                         name.as_str()
                             .ok_or(err_msg("Component of nvptx.runtime must be string"))
                             .map(|s| s.to_string())
-                    })
-                    .collect::<ResultAny<Vec<String>>>()?
+                    }).collect::<ResultAny<Vec<String>>>()?
             }
             None => Vec::new(),
         })
