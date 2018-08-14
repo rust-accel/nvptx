@@ -98,10 +98,14 @@ impl Function {
 pub fn get_ptx_functions<P: AsRef<Path>>(filename: P) -> ResultAny<Vec<String>> {
     let path = filename.as_ref().to_str().unwrap();
     let md = Module::read_bitcode(path)?;
-    Ok(md
+    let ptx: Vec<_> = md
         .functions()
         .iter()
         .filter(|f| f.is_ptx_kernel() || f.is_ptx_device_func())
         .map(|f| f.name())
-        .collect())
+        .collect();
+    if ptx.len() == 0 {
+        return Err(err_msg("No PTX found"));
+    }
+    Ok(ptx)
 }

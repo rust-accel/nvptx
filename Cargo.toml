@@ -22,6 +22,7 @@ failure = "0.1"
 log = "0.4"
 structopt = "0.2"
 llvm-sys = "60"
+colored = "1"
 
 [package.metadata.nvptx]
 runtime = ["core"]

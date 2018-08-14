@@ -1,3 +1,4 @@
+use colored::*;
 use dirs::home_dir;
 use failure::err_msg;
 use serde_json::{self, Value};
@@ -7,7 +8,7 @@ use std::str::from_utf8;
 use std::{fs, io, process};
 use tempdir::TempDir;
 
-use super::{bitcode, get_compiler_rt, save_str, TOOLCHAIN_NAME};
+use super::*;
 use error::*;
 
 /// Compile Rust string into PTX string
@@ -60,23 +61,32 @@ impl Driver {
     pub fn build(&self) -> Result<()> {
         process::Command::new("cargo")
             .arg(format!("+{}", TOOLCHAIN_NAME))
-            .args(&["build", "--target", "nvptx64-nvidia-cuda"])
+            .args(&["build", "--target", TARGET_NAME])
             .arg(if self.release { "--release" } else { "" })
             .current_dir(&self.path)
             .check_run(Step::Build)
     }
 
     fn target_dir(&self) -> io::Result<PathBuf> {
-        Ok(fs::canonicalize(format!(
-            "{}/target/nvptx64-nvidia-cuda/{}",
-            self.path.display(),
+        Ok(fs::canonicalize(self.path.join(self.target_dir_name()))?)
+    }
+
+    fn target_dir_name(&self) -> String {
+        format!(
+            "target/{}/{}",
+            TARGET_NAME,
             if self.release { "release" } else { "debug" }
-        ))?)
+        )
     }
 
     /// Link rlib into a single PTX file
     pub fn link(&self) -> Result<()> {
         let target_dir = self.target_dir().log_unwrap(Step::Link)?;
+        let bc_name = "kernel.bc";
+        let opt_bc_name = "kernel.opt.bc";
+        let ptx_name = "kernel.ptx";
+
+        // List bitcodes
         let bitcodes: ResultAny<Vec<PathBuf>> = fs::read_dir(target_dir.join("deps"))
             .log(Step::Link, "deps dir not found")?
             .filter_map(|entry| {
@@ -87,30 +97,53 @@ impl Driver {
                     None
                 }
             }).collect();
+
+        // Link Rust runtime libraries
+        eprintln!(
+            "{:>12} Rust runtimes ({}/{})",
+            "Linking".bright_green(),
+            self.target_dir_name(),
+            bc_name
+        );
         let rt = self
             .get_runtime_setting()
             .log(Step::Link, "Fail to load package.metadata.nvptx.runtime")?;
-        // link them
         process::Command::new(llvm_command("llvm-link").log(Step::Link, "llvm-link not found")?)
             .args(&bitcodes.log(Step::Link, "Fail to convert to LLVM BC")?)
             .args(get_compiler_rt(&rt).log(Step::Link, "Fail to get copiler-rt libs")?)
-            .arg("-o")
-            .arg(target_dir.join("kernel.bc"))
+            .args(&["-o", bc_name])
             .current_dir(&target_dir)
             .check_run(Step::Link)?;
-        let ptx_funcs = bitcode::get_ptx_functions(&target_dir.join("kernel.bc"))
+
+        // Internalize unused symbols
+        eprintln!(
+            "{:>12} LLVM bitcodes ({}/{})",
+            "Optimizing".bright_green(),
+            self.target_dir_name(),
+            opt_bc_name
+        );
+        let ptx_funcs = bitcode::get_ptx_functions(&target_dir.join(bc_name))
             .log(Step::Link, "Fail to parse LLVM bitcode")?;
         process::Command::new(llvm_command("opt").log(Step::Link, "opt not found")?)
+            .arg(if self.release { "-O3" } else { "" })
             .arg("-internalize")
             .arg(format!(
                 "-internalize-public-api-list={}",
                 ptx_funcs.join(",")
             )).arg("-globaldce")
+            .args(&[bc_name, "-o", opt_bc_name])
             .current_dir(&target_dir)
             .check_run(Step::Link)?;
-        // compile bytecode to PTX
+
+        // Generate PTX
+        eprintln!(
+            "{:>12} PTX code ({}/{})",
+            "Generating".bright_green(),
+            self.target_dir_name(),
+            ptx_name
+        );
         process::Command::new(llvm_command("llc").log_unwrap(Step::Link)?)
-            .args(&["-mcpu=sm_50", "kernel.bc", "-o", "kernel.ptx"])
+            .args(&["-mcpu=sm_50", opt_bc_name, "-o", ptx_name])
             .current_dir(&target_dir)
             .check_run(Step::Link)?;
         Ok(())
