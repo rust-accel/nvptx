@@ -4,7 +4,7 @@ use std::str::from_utf8;
 use std::{fs, process};
 use tempdir::TempDir;
 
-use super::TOOLCHAIN_NAME;
+use super::{TARGET_NAME, TOOLCHAIN_NAME};
 use driver::rlib2bc;
 use error::ResultAny;
 
@@ -19,11 +19,10 @@ pub fn install(path: &Path) -> ResultAny<()> {
     let rust_std = "rust-std";
     let rust_doc = "rust-docs";
     let x86 = "x86_64-unknown-linux-gnu";
-    let nvptx = "nvptx64-nvidia-cuda";
     let version = "1.28.0-dev";
     for cmp in &[rustc, rust_std, rust_doc] {
-        for target in &[x86, nvptx] {
-            if (cmp == &rustc) && (target == &nvptx) {
+        for target in &[x86, TARGET_NAME] {
+            if (cmp == &rustc) && (target == &TARGET_NAME) {
                 // rustc does not work on nvptx
                 continue;
             }
@@ -92,7 +91,10 @@ fn get_toolchain_path() -> ResultAny<PathBuf> {
 }
 
 fn get_nvptx_lib_path() -> ResultAny<PathBuf> {
-    Ok(get_toolchain_path()?.join("lib/rustlib/nvptx64-nvidia-cuda/lib"))
+    Ok(get_toolchain_path()?
+        .join("lib/rustlib")
+        .join(TARGET_NAME)
+        .join("lib"))
 }
 
 fn get_all_compiler_rt() -> ResultAny<Vec<PathBuf>> {
