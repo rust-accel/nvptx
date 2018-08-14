@@ -100,12 +100,8 @@ pub fn get_ptx_functions<P: AsRef<Path>>(filename: P) -> ResultAny<Vec<String>> 
     let md = Module::read_bitcode(path)?;
     Ok(md
         .functions()
-        .into_iter()
-        .flat_map(|f| {
-            if f.is_ptx_kernel() || f.is_ptx_device_func() {
-                Some(f.name())
-            } else {
-                None
-            }
-        }).collect())
+        .iter()
+        .filter(|f| f.is_ptx_kernel() || f.is_ptx_device_func())
+        .map(|f| f.name())
+        .collect())
 }

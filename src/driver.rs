@@ -98,8 +98,16 @@ impl Driver {
             .arg(target_dir.join("kernel.bc"))
             .current_dir(&target_dir)
             .check_run(Step::Link)?;
-        // TODO opt
-        let ptx_funcs = bitcode::get_ptx_functions(&target_dir.join("kernel.bc"));
+        let ptx_funcs = bitcode::get_ptx_functions(&target_dir.join("kernel.bc"))
+            .log(Step::Link, "Fail to parse LLVM bitcode")?;
+        process::Command::new(llvm_command("opt").log(Step::Link, "opt not found")?)
+            .arg("-internalize")
+            .arg(format!(
+                "-internalize-public-api-list={}",
+                ptx_funcs.join(",")
+            )).arg("-globaldce")
+            .current_dir(&target_dir)
+            .check_run(Step::Link)?;
         // compile bytecode to PTX
         process::Command::new(llvm_command("llc").log_unwrap(Step::Link)?)
             .args(&["-mcpu=sm_50", "kernel.bc", "-o", "kernel.ptx"])
