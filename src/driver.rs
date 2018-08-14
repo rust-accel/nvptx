@@ -117,15 +117,14 @@ impl Driver {
 
         // Internalize unused symbols
         eprintln!(
-            "{:>12} LLVM bitcodes ({}/{})",
-            "Optimizing".bright_green(),
+            "{:>12} unused bitcodes ({}/{})",
+            "Drop".bright_green(),
             self.target_dir_name(),
             opt_bc_name
         );
         let ptx_funcs = bitcode::get_ptx_functions(&target_dir.join(bc_name))
             .log(Step::Link, "Fail to parse LLVM bitcode")?;
         process::Command::new(llvm_command("opt").log(Step::Link, "opt not found")?)
-            .arg(if self.release { "-O3" } else { "" })
             .arg("-internalize")
             .arg(format!(
                 "-internalize-public-api-list={}",
@@ -143,6 +142,7 @@ impl Driver {
             ptx_name
         );
         process::Command::new(llvm_command("llc").log_unwrap(Step::Link)?)
+            .arg(if self.release { "-O3" } else { "-O0" })
             .args(&["-mcpu=sm_50", opt_bc_name, "-o", ptx_name])
             .current_dir(&target_dir)
             .check_run(Step::Link)?;
