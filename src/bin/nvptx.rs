@@ -17,7 +17,10 @@ use structopt::StructOpt;
 #[structopt(raw(setting = "structopt::clap::AppSettings::ColoredHelp"))]
 enum Opt {
     /// Compile crate into PTX
-    #[structopt(name = "build")]
+    #[structopt(
+        name = "build",
+        raw(setting = "structopt::clap::AppSettings::ColoredHelp")
+    )]
     Build {
         /// Load generated PTX to stdout
         #[structopt(short = "l", long = "load")]
@@ -26,16 +29,22 @@ enum Opt {
         #[structopt(long = "release")]
         release: bool,
         /// alternative toolchain (default=accel-nvptx)
-        #[structopt(long = "release")]
+        #[structopt(long = "toolchain")]
         toolchain: Option<String>,
     },
 
     /// Load PTX to stdout
-    #[structopt(name = "load")]
+    #[structopt(
+        name = "load",
+        raw(setting = "structopt::clap::AppSettings::ColoredHelp")
+    )]
     Load {},
 
     /// Download and Install nvptx-enabled rustc
-    #[structopt(name = "install")]
+    #[structopt(
+        name = "install",
+        raw(setting = "structopt::clap::AppSettings::ColoredHelp")
+    )]
     Install {
         /// Install path
         #[structopt(short = "p", long = "path", parse(from_os_str))]
