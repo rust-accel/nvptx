@@ -69,12 +69,13 @@ impl Driver {
     }
 
     pub fn build(&self) -> Result<()> {
-        process::Command::new("cargo")
-            .arg(format!("+{}", self.toolchain))
-            .args(&["build", "--target", TARGET_NAME])
-            .arg(if self.release { "--release" } else { "" })
-            .current_dir(&self.path)
-            .check_run(Step::Build)
+        let mut cmd = process::Command::new("cargo");
+        cmd.arg(format!("+{}", self.toolchain))
+            .args(&["build", "--target", TARGET_NAME]);
+        if self.release {
+            cmd.arg("--release");
+        }
+        cmd.current_dir(&self.path).check_run(Step::Build)
     }
 
     fn target_dir(&self) -> io::Result<PathBuf> {
