@@ -16,7 +16,7 @@ pub struct Driver {
     path: PathBuf,
     release: bool,
     toolchain: String,
-    mcpu: String,
+    arch: String,
     prefix: String,
 }
 
@@ -41,7 +41,7 @@ impl Driver {
             path: path,
             release: false,
             toolchain: TOOLCHAIN_NAME.into(),
-            mcpu: "sm_50".into(),
+            arch: "sm_50".into(),
             prefix: "kernel".into(),
         })
     }
@@ -50,8 +50,8 @@ impl Driver {
         self.toolchain = toolchain.into();
     }
 
-    pub fn set_mcpu(&mut self, mcpu: &str) {
-        self.mcpu = mcpu.into();
+    pub fn set_arch(&mut self, arch: &str) {
+        self.arch = arch.into();
     }
 
     pub fn release_build(&mut self) {
@@ -175,7 +175,7 @@ impl Driver {
         );
         process::Command::new(llvm_command("llc").log_unwrap(Step::Link)?)
             .arg(if self.release { "-O3" } else { "-O0" })
-            .arg(format!("-mcpu={}", self.mcpu))
+            .arg(format!("-mcpu={}", self.arch))
             .args(&[&self.opt_bc_name(), "-o", &self.ptx_name()])
             .current_dir(&target_dir)
             .check_run(Step::Link)?;
@@ -191,7 +191,7 @@ impl Driver {
             self.cubin_name()
         );
         process::Command::new("nvcc")
-            .arg(format!("-mcpu={}", self.mcpu))
+            .arg(format!("-arch={}", self.arch))
             .args(&[&self.ptx_name(), "-o", &self.cubin_name()])
             .current_dir(&target_dir)
             .check_run(Step::Convert)?;

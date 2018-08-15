@@ -35,8 +35,8 @@ enum Opt {
         #[structopt(long = "toolchain")]
         toolchain: Option<String>,
         /// alternative toolchain (default:sm_50)
-        #[structopt(long = "mcpu")]
-        mcpu: Option<String>,
+        #[structopt(long = "arch")]
+        arch: Option<String>,
     },
 
     /// Load PTX to stdout
@@ -82,15 +82,15 @@ fn main() -> nvptx::error::Result<()> {
             cubin,
             release,
             toolchain,
-            mcpu,
+            arch,
         } => {
             let manifest_path = get_manifest_path();
             let mut driver = Driver::with_path(manifest_path)?;
             if let Some(toolchain) = toolchain {
                 driver.set_toolchain(&toolchain);
             }
-            if let Some(mcpu) = mcpu {
-                driver.set_mcpu(&mcpu);
+            if let Some(arch) = arch {
+                driver.set_arch(&arch);
             }
             if release {
                 driver.release_build();
