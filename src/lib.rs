@@ -6,13 +6,16 @@ extern crate log;
 extern crate failure;
 #[macro_use]
 extern crate serde_derive;
+extern crate colored;
 extern crate dirs;
 extern crate glob;
+extern crate llvm_sys;
 extern crate serde;
 extern crate serde_json;
 extern crate tempdir;
 extern crate toml;
 
+mod bitcode;
 mod driver;
 pub mod error;
 pub mod manifest;
@@ -26,6 +29,7 @@ use std::path::Path;
 use std::{fs, io};
 
 const TOOLCHAIN_NAME: &'static str = "accel-nvptx";
+const TARGET_NAME: &'static str = "nvptx64-nvidia-cuda";
 
 pub(crate) fn save_str<P: AsRef<Path>>(path: P, contents: &str, filename: &str) -> io::Result<()> {
     let mut f = fs::File::create(path.as_ref().join(filename))?;
