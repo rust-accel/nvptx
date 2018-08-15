@@ -15,6 +15,7 @@ use error::*;
 pub struct Driver {
     path: PathBuf,
     release: bool,
+    toolchain: String,
 }
 
 impl Driver {
@@ -36,8 +37,17 @@ impl Driver {
         fs::create_dir_all(path.join("src")).log(Step::Ready, "Cannot create build directory")?;
         Ok(Driver {
             path: path,
-            release: true,
+            release: false,
+            toolchain: TOOLCHAIN_NAME.into(),
         })
+    }
+
+    pub fn alternative_toolchain(&mut self, toolchain: &str) {
+        self.toolchain = toolchain.into();
+    }
+
+    pub fn release_build(&mut self) {
+        self.release = true;
     }
 
     pub fn path(&self) -> &Path {
@@ -59,12 +69,13 @@ impl Driver {
     }
 
     pub fn build(&self) -> Result<()> {
-        process::Command::new("cargo")
-            .arg(format!("+{}", TOOLCHAIN_NAME))
-            .args(&["build", "--target", TARGET_NAME])
-            .arg(if self.release { "--release" } else { "" })
-            .current_dir(&self.path)
-            .check_run(Step::Build)
+        let mut cmd = process::Command::new("cargo");
+        cmd.arg(format!("+{}", self.toolchain))
+            .args(&["build", "--target", TARGET_NAME]);
+        if self.release {
+            cmd.arg("--release");
+        }
+        cmd.current_dir(&self.path).check_run(Step::Build)
     }
 
     fn target_dir(&self) -> io::Result<PathBuf> {
