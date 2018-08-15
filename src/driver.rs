@@ -192,7 +192,7 @@ impl Driver {
         );
         process::Command::new("nvcc")
             .arg(format!("-arch={}", self.arch))
-            .args(&[&self.ptx_name(), "-o", &self.cubin_name()])
+            .args(&["--cubin", &self.ptx_name(), "-o", &self.cubin_name()])
             .current_dir(&target_dir)
             .check_run(Step::Convert)?;
         Ok(())
