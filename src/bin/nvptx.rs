@@ -22,6 +22,12 @@ enum Opt {
         /// Load generated PTX to stdout
         #[structopt(short = "l", long = "load")]
         load: bool,
+        /// Release build
+        #[structopt(long = "release")]
+        release: bool,
+        /// alternative toolchain (default=accel-nvptx)
+        #[structopt(long = "release")]
+        toolchain: Option<String>,
     },
 
     /// Load PTX to stdout
@@ -56,9 +62,19 @@ fn main() -> nvptx::error::Result<()> {
     let opt = Opt::from_args();
 
     match opt {
-        Opt::Build { load } => {
+        Opt::Build {
+            load,
+            release,
+            toolchain,
+        } => {
             let manifest_path = get_manifest_path();
-            let driver = Driver::with_path(manifest_path)?;
+            let mut driver = Driver::with_path(manifest_path)?;
+            if let Some(toolchain) = toolchain {
+                driver.alternative_toolchain(&toolchain);
+            }
+            if release {
+                driver.release_build();
+            }
             driver.compile()?;
             if load {
                 println!("{}", driver.load_ptx()?);
