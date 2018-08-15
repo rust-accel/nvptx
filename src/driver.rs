@@ -16,6 +16,8 @@ pub struct Driver {
     path: PathBuf,
     release: bool,
     toolchain: String,
+    mcpu: String,
+    prefix: String,
 }
 
 impl Driver {
@@ -39,11 +41,17 @@ impl Driver {
             path: path,
             release: false,
             toolchain: TOOLCHAIN_NAME.into(),
+            mcpu: "sm_50".into(),
+            prefix: "kernel".into(),
         })
     }
 
-    pub fn alternative_toolchain(&mut self, toolchain: &str) {
+    pub fn set_toolchain(&mut self, toolchain: &str) {
         self.toolchain = toolchain.into();
+    }
+
+    pub fn set_mcpu(&mut self, mcpu: &str) {
+        self.mcpu = mcpu.into();
     }
 
     pub fn release_build(&mut self) {
@@ -90,12 +98,25 @@ impl Driver {
         )
     }
 
+    fn bitcode_name(&self) -> String {
+        format!("{}.bc", self.prefix)
+    }
+
+    fn opt_bc_name(&self) -> String {
+        format!("{}.opt.bc", self.prefix)
+    }
+
+    fn ptx_name(&self) -> String {
+        format!("{}.ptx", self.prefix)
+    }
+
+    fn cubin_name(&self) -> String {
+        format!("{}.cubin", self.prefix)
+    }
+
     /// Link rlib into a single PTX file
     pub fn link(&self) -> Result<()> {
         let target_dir = self.target_dir().log_unwrap(Step::Link)?;
-        let bc_name = "kernel.bc";
-        let opt_bc_name = "kernel.opt.bc";
-        let ptx_name = "kernel.ptx";
 
         // List bitcodes
         let bitcodes: ResultAny<Vec<PathBuf>> = fs::read_dir(target_dir.join("deps"))
@@ -114,7 +135,7 @@ impl Driver {
             "{:>12} Rust runtimes ({}/{})",
             "Linking".bright_green(),
             self.target_dir_name(),
-            bc_name
+            self.bitcode_name()
         );
         let rt = self
             .get_runtime_setting()
@@ -122,7 +143,7 @@ impl Driver {
         process::Command::new(llvm_command("llvm-link").log(Step::Link, "llvm-link not found")?)
             .args(&bitcodes.log(Step::Link, "Fail to convert to LLVM BC")?)
             .args(get_compiler_rt(&rt).log(Step::Link, "Fail to get copiler-rt libs")?)
-            .args(&["-o", bc_name])
+            .args(&["-o", &self.bitcode_name()])
             .current_dir(&target_dir)
             .check_run(Step::Link)?;
 
@@ -131,9 +152,9 @@ impl Driver {
             "{:>12} unused bitcodes ({}/{})",
             "Drop".bright_green(),
             self.target_dir_name(),
-            opt_bc_name
+            self.opt_bc_name()
         );
-        let ptx_funcs = bitcode::get_ptx_functions(&target_dir.join(bc_name))
+        let ptx_funcs = bitcode::get_ptx_functions(&target_dir.join(self.bitcode_name()))
             .log(Step::Link, "Fail to parse LLVM bitcode")?;
         process::Command::new(llvm_command("opt").log(Step::Link, "opt not found")?)
             .arg("-internalize")
@@ -141,7 +162,7 @@ impl Driver {
                 "-internalize-public-api-list={}",
                 ptx_funcs.join(",")
             )).arg("-globaldce")
-            .args(&[bc_name, "-o", opt_bc_name])
+            .args(&[&self.bitcode_name(), "-o", &self.opt_bc_name()])
             .current_dir(&target_dir)
             .check_run(Step::Link)?;
 
@@ -150,20 +171,37 @@ impl Driver {
             "{:>12} PTX code ({}/{})",
             "Generating".bright_green(),
             self.target_dir_name(),
-            ptx_name
+            self.ptx_name()
         );
         process::Command::new(llvm_command("llc").log_unwrap(Step::Link)?)
             .arg(if self.release { "-O3" } else { "-O0" })
-            .args(&["-mcpu=sm_50", opt_bc_name, "-o", ptx_name])
+            .arg(format!("-mcpu={}", self.mcpu))
+            .args(&[&self.opt_bc_name(), "-o", &self.ptx_name()])
             .current_dir(&target_dir)
             .check_run(Step::Link)?;
         Ok(())
     }
 
+    pub fn cubin(&self) -> Result<()> {
+        let target_dir = self.target_dir().log_unwrap(Step::Convert)?;
+        eprintln!(
+            "{:>12} to cubin ({}/{})",
+            "Converting".bright_green(),
+            self.target_dir_name(),
+            self.cubin_name()
+        );
+        process::Command::new("nvcc")
+            .arg(format!("-mcpu={}", self.mcpu))
+            .args(&[&self.ptx_name(), "-o", &self.cubin_name()])
+            .current_dir(&target_dir)
+            .check_run(Step::Convert)?;
+        Ok(())
+    }
+
     pub fn load_ptx(&self) -> Result<String> {
         let target_dir = self.target_dir().log_unwrap(Step::Load)?;
-        let mut f = fs::File::open(target_dir.join("kernel.ptx"))
-            .log(Step::Load, "kernel.ptx cannot open")?;
+        let mut f = fs::File::open(target_dir.join(self.ptx_name()))
+            .log(Step::Load, "PTX file cannot open")?;
         let mut res = String::new();
         f.read_to_string(&mut res).unwrap();
         Ok(res)
@@ -173,7 +211,7 @@ impl Driver {
         let path = self.path.join("target");
         match fs::remove_dir_all(&path) {
             Ok(_) => {}
-            Err(_) => info!("Already clean (dir = {})", path.display()),
+            Err(_) => info!("already clean (dir = {})", path.display()),
         };
     }
 

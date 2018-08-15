@@ -25,12 +25,18 @@ enum Opt {
         /// Load generated PTX to stdout
         #[structopt(short = "l", long = "load")]
         load: bool,
+        /// Convert generated PTX to cubin
+        #[structopt(long = "cubin")]
+        cubin: bool,
         /// Release build
         #[structopt(long = "release")]
         release: bool,
-        /// alternative toolchain (default=accel-nvptx)
+        /// alternative toolchain (default:accel-nvptx)
         #[structopt(long = "toolchain")]
         toolchain: Option<String>,
+        /// alternative toolchain (default:sm_50)
+        #[structopt(long = "mcpu")]
+        mcpu: Option<String>,
     },
 
     /// Load PTX to stdout
@@ -73,13 +79,18 @@ fn main() -> nvptx::error::Result<()> {
     match opt {
         Opt::Build {
             load,
+            cubin,
             release,
             toolchain,
+            mcpu,
         } => {
             let manifest_path = get_manifest_path();
             let mut driver = Driver::with_path(manifest_path)?;
             if let Some(toolchain) = toolchain {
-                driver.alternative_toolchain(&toolchain);
+                driver.set_toolchain(&toolchain);
+            }
+            if let Some(mcpu) = mcpu {
+                driver.set_mcpu(&mcpu);
             }
             if release {
                 driver.release_build();
@@ -87,6 +98,9 @@ fn main() -> nvptx::error::Result<()> {
             driver.compile()?;
             if load {
                 println!("{}", driver.load_ptx()?);
+            }
+            if cubin {
+                driver.cubin()?;
             }
         }
         Opt::Load {} => {
