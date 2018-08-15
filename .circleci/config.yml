@@ -21,6 +21,9 @@ jobs:
           command: |
             cargo run -- install
             cargo test -v
+    environment:
+      LLVM_SYS_60_PREFIX: /usr/lib/llvm-6.0
+
 
 workflows:
   version: 2
