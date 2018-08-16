@@ -5,18 +5,25 @@ nvptx toolchain
 [![docs.rs](https://docs.rs/nvptx/badge.svg)](https://docs.rs/nvptx)
 [![CircleCI](https://circleci.com/gh/rust-accel/nvptx.svg?style=shield)](https://circleci.com/gh/rust-accel/nvptx)
 
-Compile Rust into PTX
+Compile Rust into PTX/cubin
 
 Install
---------
+-----------
 
-nvptx command for manging nvptx-toolchain for Rust can be installed from crate.io
+### nvptx command
+
+`nvptx` is a CLI tool to
+
+- Build Rust crate into a PTX/cubin file
+- install `accel-nvptx` toolchain (for rustup)
 
 ```
 cargo install nvptx
 ```
 
-And then, you can install nvptx-toolchain (including `rustc`, `rust-std` for `nvptx64-nvidia-cuda` target):
+### accel-nvptx toolchain
+
+`accel-nvptx` is a toolchain name for rustup. It contains `rustc` and runtime libraries with `nvptx64-nvidia-cuda` target.
 
 ```
 nvptx install
@@ -35,7 +42,7 @@ This toolchain is built from
   - [rust-accel/rust](https://github.com/rust-accel/rust)
   - [rust-accel/libc](https://github.com/rust-accel/libc)
 
-Build crate to nvptx64-nvidia-cuda target
+Build
 ------
 
 You can build your crate using `accel-nvptx` toolchain into a PTX file
@@ -53,16 +60,6 @@ cargo +accel-nvptx build --target nvptx64-nvidia-cuda
 ```
 
 - Link rlib into a LLVM bitcode using `llvm-link`
+- Drop unused bitcode using `opt`
 - Compile LLVM bitcode into PTX using `llc`
-
-You can load the PTX file into your stdout using
-
-```
-nvptx build --load
-```
-
-or
-
-```
-nvptx load
-```
+- (Optional) Convert PTX to cubin using `nvcc`
