@@ -33,8 +33,8 @@ jobs:
           name: Check if generate PTX is valid
           command: |
             cargo install --path . -f
-            cd ./nvptx_crate_example
             nvptx install
+            cd ./example
             nvptx build --cubin
 
 workflows:
