@@ -7,6 +7,7 @@ pub enum Step {
     Ready,
     Link,
     Build,
+    Convert,
     Load,
 }
 

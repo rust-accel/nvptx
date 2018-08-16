@@ -24,6 +24,18 @@ jobs:
     environment:
       LLVM_SYS_60_PREFIX: /usr/lib/llvm-6.0
 
+  check_ptx:
+    docker:
+      - image: registry.gitlab.com/termoshtt/rust-cuda:cuda9.1
+    steps:
+      - checkout
+      - run:
+          name: Check if generate PTX is valid
+          command: |
+            cargo install --path . -f
+            nvptx install
+            cd ./example
+            nvptx build --cubin
 
 workflows:
   version: 2
@@ -31,3 +43,4 @@ workflows:
     jobs:
       - test_cuda91
       - test_cuda91_llvm60
+      - check_ptx
