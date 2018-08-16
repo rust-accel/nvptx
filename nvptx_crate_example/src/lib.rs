@@ -1,4 +1,5 @@
-#![feature(abi_ptx)]
+#![feature(abi_ptx, lang_items, core_intrinsics)]
+#![no_std]
 
 extern crate accel_core;
 
@@ -8,4 +9,9 @@ pub unsafe extern "ptx-kernel" fn add(a: *const f64, b: *const f64, c: *mut f64,
     if (i as usize) < n {
         *c.offset(i) = *a.offset(i) + *b.offset(i);
     }
+}
+
+#[lang = "panic_impl"]
+extern "C" fn rust_begin_panic(_info: &core::panic::PanicInfo) -> ! {
+    unsafe { core::intrinsics::abort() }
 }
