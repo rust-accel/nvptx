@@ -5,6 +5,7 @@ authors = ["Toshiki Teramura <toshiki.teramura@gmail.com>"]
 
 [dependencies]
 accel-core = "*"
+nvptx-panic = { path = "../nvptx-panic" }
 
 [package.metadata.nvptx]
 runtime = ["core"]

@@ -10,8 +10,3 @@ pub unsafe extern "ptx-kernel" fn add(a: *const f64, b: *const f64, c: *mut f64,
         *c.offset(i) = *a.offset(i) + *b.offset(i);
     }
 }
-
-#[lang = "panic_impl"]
-extern "C" fn rust_begin_panic(_info: &core::panic::PanicInfo) -> ! {
-    unsafe { core::intrinsics::abort() }
-}
