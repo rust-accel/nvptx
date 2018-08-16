@@ -3,4 +3,11 @@ name = "nvptx-panic"
 version = "0.1.0"
 authors = ["Toshiki Teramura <toshiki.teramura@gmail.com>"]
 
+description   = "panic implementation for nvptx target"
+documentation = "https://docs.rs/nvptx-panic/"
+repository    = "https://github.com/rust-accel/nvptx"
+keywords      = []
+categories    = []
+license       = "MIT"
+
 [dependencies]
