@@ -1,20 +1,5 @@
 //! Compile Rust into PTX string using LLVM
 
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate failure;
-#[macro_use]
-extern crate serde_derive;
-extern crate colored;
-extern crate dirs;
-extern crate glob;
-extern crate llvm_sys;
-extern crate serde;
-extern crate serde_json;
-extern crate tempdir;
-extern crate toml;
-
 mod bitcode;
 mod driver;
 pub mod error;

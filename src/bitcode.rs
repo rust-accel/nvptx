@@ -8,7 +8,7 @@ use std::os::raw::c_char;
 use std::path::*;
 use std::ptr::null_mut;
 
-use error::*;
+use crate::error::*;
 
 struct MemoryBuffer(LLVMMemoryBufferRef);
 

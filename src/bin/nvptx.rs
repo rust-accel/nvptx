@@ -1,11 +1,3 @@
-extern crate nvptx;
-
-#[macro_use]
-extern crate structopt;
-extern crate dirs;
-extern crate failure;
-extern crate tempdir;
-
 use nvptx::error::{Logging, Step};
 use nvptx::{install, Driver};
 

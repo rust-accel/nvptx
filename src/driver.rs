@@ -1,6 +1,7 @@
 use colored::*;
 use dirs::home_dir;
 use failure::err_msg;
+use log::*;
 use serde_json::{self, Value};
 use std::io::Read;
 use std::path::*;
@@ -128,7 +129,8 @@ impl Driver {
                 } else {
                     None
                 }
-            }).collect();
+            })
+            .collect();
 
         // Link Rust runtime libraries
         eprintln!(
@@ -161,7 +163,8 @@ impl Driver {
             .arg(format!(
                 "-internalize-public-api-list={}",
                 ptx_funcs.join(",")
-            )).arg("-globaldce")
+            ))
+            .arg("-globaldce")
             .args(&[&self.bitcode_name(), "-o", &self.opt_bc_name()])
             .current_dir(&target_dir)
             .check_run(Step::Link)?;
@@ -253,7 +256,8 @@ impl Driver {
                         name.as_str()
                             .ok_or(err_msg("Component of nvptx.runtime must be string"))
                             .map(|s| s.to_string())
-                    }).collect::<ResultAny<Vec<String>>>()?
+                    })
+                    .collect::<ResultAny<Vec<String>>>()?
             }
             None => Vec::new(),
         })
@@ -276,7 +280,7 @@ pub fn rlib2bc(path: &Path) -> ResultAny<PathBuf> {
     // trim ar output
     let components: Vec<_> = from_utf8(&output.stdout)?
         .lines()
-        .map(|line| line.trim_left_matches("x - "))
+        .map(|line| line.trim_start_matches("x - "))
         .collect();
     // filter LLVM BC files
     let bcs: Vec<_> = components

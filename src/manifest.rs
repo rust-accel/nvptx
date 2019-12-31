@@ -1,9 +1,10 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::*;
 use toml;
 
 use super::save_str;
-use error::*;
+use crate::error::*;
 
 #[derive(Debug, Clone)]
 pub struct Crate {
@@ -63,7 +64,8 @@ impl CargoTOML {
                 let version = c.version.unwrap_or("*".to_string());
                 let path = c.path.map(|p| p.to_str().unwrap().into());
                 (name, CrateInfo { version, path })
-            }).collect();
+            })
+            .collect();
         CargoTOML {
             package: Package::default(),
             profile: Profile::default(),

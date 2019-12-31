@@ -5,8 +5,8 @@ use std::{fs, process};
 use tempdir::TempDir;
 
 use super::{TARGET_NAME, TOOLCHAIN_NAME};
-use driver::rlib2bc;
-use error::ResultAny;
+use crate::driver::rlib2bc;
+use crate::error::ResultAny;
 
 /// Download nvptx-enable rustc from AWS S3
 ///
@@ -106,7 +106,8 @@ fn get_all_compiler_rt() -> ResultAny<Vec<PathBuf>> {
                 return None;
             }
             Some(path)
-        }).collect())
+        })
+        .collect())
 }
 
 /// Installed runtime libraries
@@ -141,7 +142,8 @@ pub fn get_compiler_rt(runtimes: &[String]) -> ResultAny<Vec<PathBuf>> {
                 }
             }
             unreachable!("Corresponding BC does not found");
-        }).collect())
+        })
+        .collect())
 }
 
 #[cfg(test)]
