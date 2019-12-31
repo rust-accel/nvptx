@@ -21,8 +21,9 @@ dirs = "1.0"
 failure = "0.1"
 log = "0.4"
 structopt = "0.2"
-llvm-sys = "60"
+llvm-sys = { version = "80", features = ["no-llvm-linking"] }
 colored = "1"
+rustc-llvm-proxy = { git = "http://github.com/termoshtt/rustc-llvm-proxy", branch = "fix_create_proxy_macro" }
 
 [package.metadata.nvptx]
 runtime = ["core"]
