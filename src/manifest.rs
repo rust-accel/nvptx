@@ -87,7 +87,7 @@ struct Package {
 impl Default for Package {
     fn default() -> Self {
         Package {
-            name: "ptx-builder".to_string(),
+            name: "accel-nvptx-builder".to_string(),
             version: "0.1.0".to_string(),
         }
     }
