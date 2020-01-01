@@ -13,5 +13,7 @@ jobs:
         sudo apt install -y llvm-dev
     - name: Build
       run: cargo build --verbose
+    - name: Install accel-nvptx toochain
+      run: cargo run -- install
     - name: Run tests
       run: cargo test --verbose
