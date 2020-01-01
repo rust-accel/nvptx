@@ -1,0 +1,19 @@
+name: Rust
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install LLVM libraries
+      run: |
+        sudo apt update
+        sudo apt install -y llvm-dev
+    - name: Build
+      run: cargo build --verbose
+    - name: Install accel-nvptx toochain
+      run: cargo run -- install
+    - name: Run tests
+      run: cargo test --verbose

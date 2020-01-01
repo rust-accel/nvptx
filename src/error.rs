@@ -1,4 +1,4 @@
-use failure;
+use failure::Fail;
 use std::{io, process};
 
 #[derive(Debug, Clone, Copy)]
@@ -15,9 +15,7 @@ pub enum Step {
 pub enum CompileError {
     #[fail(
         display = "External command {} failed during {:?} step. Return code: {}",
-        command,
-        step,
-        error_code
+        command, step, error_code
     )]
     CommandFailure {
         step: Step,
@@ -27,8 +25,7 @@ pub enum CompileError {
 
     #[fail(
         display = "External command {} failed during {:?}. Please ensure it is installed.",
-        command,
-        step,
+        command, step
     )]
     CommandIOFailure {
         step: Step,
@@ -38,9 +35,7 @@ pub enum CompileError {
 
     #[fail(
         display = "Error during {:?} step: {:?}, error: {:?}",
-        step,
-        comment,
-        error
+        step, comment, error
     )]
     OtherError {
         step: Step,
@@ -79,7 +74,8 @@ impl<T, E: Into<failure::Error>> Logging for ::std::result::Result<T, E> {
                 step,
                 comment: comment.to_owned(),
                 error: e.into(),
-            }.into()
+            }
+            .into()
         })
     }
 }
@@ -106,7 +102,8 @@ impl CheckRun for process::Command {
                         step,
                         command,
                         error_code,
-                    }.into())
+                    }
+                    .into())
                 } else {
                     Ok(())
                 }
